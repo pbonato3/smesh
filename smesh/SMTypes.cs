@@ -50,16 +50,47 @@
         }
     }
 
-    public struct Mesh
-    {
-        public int VertCount;
-        public int FaceCount;
+    public struct Matrix {
+        public double M00, M01, M02, M03;
+        public double M10, M11, M12, M13;
+        public double M20, M21, M22, M23;
+        public double M30, M31, M32, M33;
+    }
 
-        public int[]? Indices;
-        public Vector3[]? Vertices;
-        public Vector3[]? Normals;
-        public Vector2[]? TextureCoord;
-    };
+    public struct Segment2
+    {
+        public Vector2 A, B;
+
+        public Segment2()
+        {
+            A = new Vector2();
+            B = new Vector2();
+        }
+    }
+
+    public struct Segment3 {
+        public Vector3 A, B;
+
+        public Segment3() { 
+            A = new Vector3();
+            B = new Vector3();
+        }
+    }
+
+    public struct Plane {
+        public Vector3 Normal;
+        public double Dist;
+
+        public Plane() {
+            Normal = new Vector3();
+            Dist = 0;
+        }
+
+        public Plane(Vector3 norm, double d) {
+            Normal = norm;
+            Dist = d;
+        }
+    }
 
     public struct AABB
     {
@@ -76,7 +107,17 @@
             this.Min = new Vector3(b.Min);
             this.Max = new Vector3(b.Max);
         }
+    };
 
+    public struct Mesh
+    {
+        public int VertCount;
+        public int FaceCount;
+
+        public int[]? Indices;
+        public Vector3[]? Vertices;
+        public Vector3[]? Normals;
+        public Vector2[]? TextureCoord;
     };
 
 }
