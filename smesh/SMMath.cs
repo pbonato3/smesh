@@ -1,4 +1,7 @@
-﻿namespace SMesh
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace SMesh
 {
     public static class SMMath
     {
@@ -37,6 +40,9 @@
             return Vector2Length(Vector2Subtract(b, a));
         }
 
+        public static bool AreEquals(Vector2 a, Vector2 b, double tol) { 
+            return Vector2Distance(a, b) <= tol;
+        }
 
         // Vector3 Methods
         public static Vector3 Vector3Add(Vector3 a, Vector3 b)
@@ -79,7 +85,6 @@
             return Vector3Length(Vector3Subtract(b, a));
         }
 
-
         // Matrix Methods
 
         public static Matrix IdentityMatrix() { 
@@ -93,7 +98,7 @@
             return mat;
         }
 
-        public static Vector2 Vector2Transform(Matrix m, Vector2 v)
+        public static Vector2 Transform(Matrix m, Vector2 v)
         {
             var o = new Vector2();
 
@@ -103,12 +108,35 @@
             return o;
         }
 
-        public static Vector3 Vector3Transform(Matrix m, Vector3 v) {
+        public static Vector3 Transform(Matrix m, Vector3 v) {
             var o = new Vector3();
 
             o.X = v.X * m.M00 + v.Y * m.M01 + v.Z * m.M02 + m.M03;
             o.Y = v.X * m.M10 + v.Y * m.M11 + v.Z * m.M12 + m.M13;
             o.Z = v.X * m.M20 + v.Y * m.M21 + v.Z * m.M22 + m.M23;
+
+            return o;
+        }
+
+
+        public static Vector3 TransformTo3D(Matrix m, Vector2 vec)
+        {
+            Vector3 v = new Vector3(vec.X, vec.Y, 0);
+            var o = new Vector3();
+
+            o.X = v.X * m.M00 + v.Y * m.M01 + v.Z * m.M02 + m.M03;
+            o.Y = v.X * m.M10 + v.Y * m.M11 + v.Z * m.M12 + m.M13;
+            o.Z = v.X * m.M20 + v.Y * m.M21 + v.Z * m.M22 + m.M23;
+
+            return o;
+        }
+
+        public static Vector2 TransformTo2D(Matrix m, Vector3 v)
+        {
+            var o = new Vector2();
+
+            o.X = v.X * m.M00 + v.Y * m.M01 + v.Z * m.M02 + m.M03;
+            o.Y = v.X * m.M10 + v.Y * m.M11 + v.Z * m.M12 + m.M13;
 
             return o;
         }
@@ -187,6 +215,64 @@
 
 
         // Segment Methods
+
+        private static bool EvaluateOnSegment(Segment2 s, Vector2 pt ) {
+            var minX = Math.Min(s.A.X, s.B.X);
+            var maxX = Math.Max(s.A.X, s.B.X);
+
+            var minY = Math.Max(s.A.Y, s.B.Y);
+            var maxY = Math.Max(s.A.Y, s.B.Y);
+
+            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY;
+        }
+
+        private static bool EvaluateOnSegment(Segment3 s, Vector3 pt)
+        {
+            var minX = Math.Min(s.A.X, s.B.X);
+            var maxX = Math.Max(s.A.X, s.B.X);
+
+            var minY = Math.Max(s.A.Y, s.B.Y);
+            var maxY = Math.Max(s.A.Y, s.B.Y);
+
+            var minZ = Math.Max(s.A.Z, s.B.Z);
+            var maxZ = Math.Max(s.A.Z, s.B.Z);
+
+            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY && pt.Z >= minZ && pt.Z <= maxZ;
+        }
+
+        private static double triSign(Vector2 p1, Vector2 p2, Vector2 p3)
+        {
+            return (p1.X - p3.X) * (p2.Y - p3.Y) - (p2.X - p3.X) * (p1.Y - p3.Y);
+        }
+
+        public static bool IsPointInTriangle(Vector2 pt, Vector2 v1, Vector2 v2, Vector2 v3)
+        {
+            double d1, d2, d3;
+            bool has_neg, has_pos;
+
+            d1 = triSign(pt, v1, v2);
+            d2 = triSign(pt, v2, v3);
+            d3 = triSign(pt, v3, v1);
+
+            has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+            has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+            return !(has_neg && has_pos);
+        }
+
+        public static bool GetPointOnSegment(Vector2 pt, Vector2 va, Vector2 vb, double tol, out Vector2 res) {
+            if (AreEquals(pt, va, tol)) {
+                res = va;
+                return true;
+            }
+            if (AreEquals(pt, vb, tol))
+            {
+                res = vb;
+                return true;
+            }
+            res = SegmentClosestPoint(pt, new Segment2(va, vb));
+            return AreEquals(pt, res, tol);
+        }
 
         public static Vector2 LineClosestPoint(Vector2 pt, Segment2 seg) {
             var AB = Vector2Subtract(seg.B, seg.A);
@@ -272,27 +358,15 @@
             var result = LineLineIntersection(l0, l1, out pt);
             if (!result) { return result; }
 
-            var minX = Math.Min(l1.A.X, l1.B.X);
-            var maxX = Math.Max(l1.A.X, l1.B.X);
-
-            var minY = Math.Max(l1.A.Y, l1.B.Y);
-            var maxY = Math.Max(l1.A.Y, l1.B.Y);
-
-            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY;
+            return EvaluateOnSegment(l1, pt);
         }
 
         public static bool SegmentSegmentIntersection(Segment2 l0, Segment2 l1, out Vector2 pt)
         {
-            var result = LineSegmentIntersection(l1, l0, out pt);
+            var result = LineSegmentIntersection(l0, l1, out pt);
             if (!result) { return result; }
 
-            var minX = Math.Min(l1.A.X, l1.B.X);
-            var maxX = Math.Max(l1.A.X, l1.B.X);
-
-            var minY = Math.Max(l1.A.Y, l1.B.Y);
-            var maxY = Math.Max(l1.A.Y, l1.B.Y);
-
-            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY;
+            return EvaluateOnSegment(l0, pt);
         }
 
 
@@ -332,7 +406,14 @@
             return true;
         }
 
+        public static bool SegmentPlaneIntersection(Segment3 s, Plane p, out Vector3 pt)
+        {
+            if (!LinePlaneIntersection(s, p, out pt)) {
+                return false;
+            }
 
+            return (EvaluateOnSegment(s, pt));
+        }
 
 
         // AABB Methods
@@ -365,6 +446,20 @@
             return Vector3Scale(Vector3Add(bbox.Min, bbox.Max), 0.5);
         }
 
+        public static AABB Expand(AABB bbox, Vector3 pt) { 
+            var result = new AABB();
+
+            result.Min.X = Math.Min(bbox.Min.X, pt.X);
+            result.Min.Y = Math.Min(bbox.Min.Y, pt.Y);
+            result.Min.Z = Math.Min(bbox.Min.Z, pt.Z);
+
+            result.Max.X = Math.Max(bbox.Max.X, pt.X);
+            result.Max.Y = Math.Max(bbox.Max.Y, pt.Y);
+            result.Max.Z = Math.Max(bbox.Max.Z, pt.Z);
+
+            return result;
+        }
+
         public static int MaxDim(AABB bbox)
         {
             var diagonal = Vector3Subtract(bbox.Max, bbox.Min);
@@ -375,6 +470,12 @@
                 return 1;
             }
             return 2;
+        }
+
+        // Edge Methods
+
+        public static Edge OrderedEdge(int a, int b) {
+            return new Edge(Math.Min(a, b), Math.Max(a, b));
         }
     }
 }

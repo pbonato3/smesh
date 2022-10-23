@@ -24,6 +24,8 @@ Console.WriteLine("C: " + Vector3String(SMMath.Vector3Transform(to2d, c)));
 Console.WriteLine("P: " + Vector3String(SMMath.Vector3Transform(to2d, p)));
 */
 
+
+
 static string Vector3String(Vector3 vec) {
     string str = "(";
     str += vec.X.ToString();

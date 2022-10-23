@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace SMesh
 {
-    internal class SMObj
+    public static class SMObj
     {
         static CultureInfo IC = CultureInfo.InvariantCulture;
 

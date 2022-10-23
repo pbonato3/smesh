@@ -7,7 +7,7 @@ using System.Xml.Schema;
 
 namespace SMesh
 {
-    internal class SMBVH
+    public static class SMBVH
     {
         public static BVHNode BuildBVH(Mesh mesh)
         {
@@ -23,6 +23,20 @@ namespace SMesh
             RecursiceBVH(ref root, boxes, toAdd);
 
             return root;
+        }
+
+        public static void CheckCollisions(ref List<int> res, BVHNode node, AABB box) {
+            if (!SMMath.Collision(node.BBox, box)) {
+                return;
+            }
+
+            if (node.Index >= 0) { 
+                res.Add(node.Index);
+                return;
+            }
+
+            CheckCollisions(ref res, node.Right, box);
+            CheckCollisions(ref res, node.Left, box);
         }
 
         public static void RecursiceBVH(ref BVHNode currNode, AABB[] boxes, int[] toAdd) {

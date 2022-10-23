@@ -1,4 +1,6 @@
-﻿namespace SMesh
+﻿using System.Security.Cryptography.X509Certificates;
+
+namespace SMesh
 {
 
     public struct Vector2
@@ -66,6 +68,12 @@
             A = new Vector2();
             B = new Vector2();
         }
+
+        public Segment2(Vector2 a, Vector2 b)
+        {
+            A = a;
+            B = b;
+        }
     }
 
     public struct Segment3 {
@@ -74,6 +82,11 @@
         public Segment3() { 
             A = new Vector3();
             B = new Vector3();
+        }
+
+        public Segment3(Vector3 a, Vector3 b) {
+            A = a;
+            B = b;
         }
     }
 
@@ -120,4 +133,13 @@
         public Vector2[]? TextureCoord;
     };
 
+    public struct Edge
+    {
+        public int A, B;
+
+        public Edge(int a, int b) {
+            A = a;
+            B = b;
+        }
+    }
 }
