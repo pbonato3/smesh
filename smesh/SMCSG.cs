@@ -1,6 +1,7 @@
 ﻿using SMesh;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -30,6 +31,14 @@ namespace SMesh
 
             public Matrix To2D;
             public Matrix To3D;
+
+            public Vector3 FaceVertex(int nT, int nV) {
+                return Vertices[Triangles[nT * 3 + nV]];
+            }
+            public Vector2 FaceVertex2D(int nT, int nV)
+            {
+                return Vertices2D[Triangles[nT * 3 + nV]];
+            }
         }
 
 
@@ -92,79 +101,7 @@ namespace SMesh
                     builderA.FacePlane = SMMath.PlaneFrom3Points(builderA.Vertices[0], builderA.Vertices[1], builderA.Vertices[2]);
                     builderB.FacePlane = SMMath.PlaneFrom3Points(builderB.Vertices[0], builderB.Vertices[1], builderB.Vertices[2]);
 
-                    // Points of intersection with the plane ( 0 to 3 )
-                    List<Vector3> AonB = new List<Vector3>();
-                    List<Vector3> BonA = new List<Vector3>();
-
-                    // If a point is on the plane there is no need to check also the two connected segment for intersection
-                    bool[] segA = new bool[3] { false, false, false };
-                    bool[] segB = new bool[3] { false, false, false };
-
-                    // Check if points of the face are on the plane of the other face
-                    for (int i = 0; i < 3; ++i) {
-                        if (SMMath.PointOnPlane(builderB.FacePlane, builderA.Vertices[i], tol))
-                        {
-                            AonB.Add(builderA.Vertices[i]);
-                            segA[i] = true;
-                            segA[(i + 2) % 3] = true;
-                        }
-
-                        if (SMMath.PointOnPlane(builderA.FacePlane, builderB.Vertices[i], tol))
-                        {
-                            BonA.Add(builderB.Vertices[i]);
-                            segB[i] = true;
-                            segB[(i + 2) % 3] = true;
-                        }
-                    }
-
-                    // Check for face's segments intersections with the other face's plane
-                    for (int i = 0; i < 3; ++i)
-                    {
-                        if (!segA[i])
-                        {
-                            var pt = new Vector3();
-                            var sg = new Segment3(builderA.Vertices[i], builderA.Vertices[(i + 1) % 3]);
-                            if (SMMath.SegmentPlaneIntersection(sg, builderB.FacePlane, out pt)) {
-                                AonB.Add(pt);
-                                segA[i] = true;
-                            }
-                        }
-
-                        if (!segB[i])
-                        {
-                            var pt = new Vector3();
-                            var sg = new Segment3(builderB.Vertices[i], builderB.Vertices[(i + 1) % 3]);
-                            if (SMMath.SegmentPlaneIntersection(sg, builderA.FacePlane, out pt))
-                            {
-                                BonA.Add(pt);
-                                segB[i] = true;
-                            }
-                        }
-                    }
-
-                    // TODO: Add points to face builders. Check against each sub face!
-                    if (BonA.Count > 0)
-                    {
-                        for (int i = 0; i < builderA.Triangles.Count() / 3; ++i)
-                        {
-                            var va = builderA.Vertices[builderA.Triangles[i * 3 + 0]];
-                            var vb = builderA.Vertices[builderA.Triangles[i * 3 + 1]];
-                            var vc = builderA.Vertices[builderA.Triangles[i * 3 + 2]];
-
-                        }
-                    }
-
-                    if (AonB.Count > 0)
-                    {
-                        for (int i = 0; i < builderB.Triangles.Count() / 3; ++i)
-                        {
-                            var va = builderB.Vertices[builderB.Triangles[i * 3 + 0]];
-                            var vb = builderB.Vertices[builderB.Triangles[i * 3 + 1]];
-                            var vc = builderB.Vertices[builderB.Triangles[i * 3 + 2]];
-
-                        }
-                    }
-
+                    SplitBuilders(ref builderA, ref builderB, tol);
                 }
             }
         }
@@ -303,6 +240,179 @@ namespace SMesh
         }
 
 
+        private static bool AddPointToBuilder(ref FaceBuilder builder, Vector3 pt, double tol){
+            var pt2d = SMMath.TransformTo2D(builder.To2D, pt);
+
+            // If vertex is colose enough to an existing one do nothing
+            for (int i = 0; i < builder.Vertices2D.Count; ++i) {
+                if (SMMath.Vector2Distance(builder.Vertices2D[i], pt2d) <= tol) {
+                    return true;
+                }
+            }
+
+            for (int i = 0; i < builder.Triangles.Count; ++i)
+            {
+                for (int j = 0; j < 3; ++j)
+                {
+                    var closest = SMMath.SegmentClosestPoint(pt2d, new Segment2(builder.FaceVertex2D(i, j), builder.FaceVertex2D(i, (j + 1) % 3)));
+                    if (SMMath.Vector2Distance(closest, pt2d) > tol)
+                    {
+                        continue;
+                    }
+
+                    // TODO: is it correct to add the closest?
+                    builder.Vertices.Add(SMMath.TransformTo3D(builder.To3D, closest));
+                    builder.Vertices2D.Add(closest);
+                    int vertIdx = builder.Vertices.Count - 1;
+
+                    bool foundOther = false;
+                    // Check if one of the remaining triangles shares the splitted edge
+                    for (int ii = i + 1; ii < builder.Triangles.Count; ++ii)
+                    {
+                        for (int jj = 0; jj < 3; ++jj)
+                        {
+                            if (builder.Triangles[i * 3 + j] == builder.Triangles[ii * 3 + jj] &&
+                                builder.Triangles[i * 3 + (j + 1) % 3] == builder.Triangles[ii * 3 + (jj + 1) % 3]) {
+
+                                builder.Triangles.Add(builder.Triangles[ii * 3 + (jj + 2) % 3]);
+                                builder.Triangles.Add(builder.Triangles[ii * 3 + jj]);
+                                builder.Triangles.Add(builder.Triangles[vertIdx]);
+
+                                builder.Triangles.Add(builder.Triangles[ii * 3 + (jj + 2) % 3]);
+                                builder.Triangles.Add(builder.Triangles[vertIdx]);
+                                builder.Triangles.Add(builder.Triangles[ii * 3 + (jj + 1) % 3]);
+
+                                builder.Triangles.RemoveAt(ii * 3);
+                                builder.Triangles.RemoveAt(ii * 3);
+                                builder.Triangles.RemoveAt(ii * 3);
+
+                                foundOther = true; break;
+                            }
+                        }
+                        if (foundOther) { break; }
+                    }
+
+                    // Add 2 new triangles and remove the old one
+
+                    builder.Triangles.Add(builder.Triangles[i * 3 + (j + 2) % 3]);
+                    builder.Triangles.Add(builder.Triangles[i * 3 + j]);
+                    builder.Triangles.Add(builder.Triangles[vertIdx]);
+
+                    builder.Triangles.Add(builder.Triangles[i * 3 + (j + 2) % 3]);
+                    builder.Triangles.Add(builder.Triangles[vertIdx]);
+                    builder.Triangles.Add(builder.Triangles[i * 3 + (j + 1) % 3]);
+
+                    builder.Triangles.RemoveAt(i * 3);
+                    builder.Triangles.RemoveAt(i * 3);
+                    builder.Triangles.RemoveAt(i * 3);
+
+                    return true;
+                }
+
+                // If the point is inside the triangle, add the point, remove the triangle and add 3 new triangles
+                if (SMMath.IsPointInTriangle(pt2d, builder.FaceVertex2D(i, 0), builder.FaceVertex2D(i, 1), builder.FaceVertex2D(i, 2)))
+                {
+                    builder.Vertices.Add(pt);
+                    builder.Vertices2D.Add(pt2d);
+                    int vertIdx = builder.Vertices.Count - 1;
+
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 0]);
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 1]);
+                    builder.Triangles.Add(vertIdx);
+
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 1]);
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 2]);
+                    builder.Triangles.Add(vertIdx);
+
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 2]);
+                    builder.Triangles.Add(builder.Triangles[i * 3 + 0]);
+                    builder.Triangles.Add(vertIdx);
+
+                    builder.Triangles.RemoveAt(i * 3);
+                    builder.Triangles.RemoveAt(i * 3);
+                    builder.Triangles.RemoveAt(i * 3);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static void SplitBuilders(ref FaceBuilder builderA, ref FaceBuilder builderB, double tol) {
+            // Points of intersection with the plane ( 0 to 3 )
+            List<Vector3> AonB = new List<Vector3>();
+            List<Vector3> BonA = new List<Vector3>();
+
+            // If a point is on the plane there is no need to check also the two connected segment for intersection
+            bool[] segA = new bool[3] { false, false, false };
+            bool[] segB = new bool[3] { false, false, false };
+
+            // Check if points of the face are on the plane of the other face
+            for (int i = 0; i < 3; ++i)
+            {
+                if (SMMath.PointOnPlane(builderB.FacePlane, builderA.Vertices[i], tol))
+                {
+                    AonB.Add(builderA.Vertices[i]);
+                    segA[i] = true;
+                    segA[(i + 2) % 3] = true;
+                }
+
+                if (SMMath.PointOnPlane(builderA.FacePlane, builderB.Vertices[i], tol))
+                {
+                    BonA.Add(builderB.Vertices[i]);
+                    segB[i] = true;
+                    segB[(i + 2) % 3] = true;
+                }
+            }
+
+            // Check for face's segments intersections with the other face's plane
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!segA[i])
+                {
+                    var pt = new Vector3();
+                    var sg = new Segment3(builderA.Vertices[i], builderA.Vertices[(i + 1) % 3]);
+                    if (SMMath.SegmentPlaneIntersection(sg, builderB.FacePlane, out pt))
+                    {
+                        AonB.Add(pt);
+                        segA[i] = true;
+                    }
+                }
+
+                if (!segB[i])
+                {
+                    var pt = new Vector3();
+                    var sg = new Segment3(builderB.Vertices[i], builderB.Vertices[(i + 1) % 3]);
+                    if (SMMath.SegmentPlaneIntersection(sg, builderA.FacePlane, out pt))
+                    {
+                        BonA.Add(pt);
+                        segB[i] = true;
+                    }
+                }
+            }
+
+            // TODO: Use AddPointToBuilder, then consider the edges intersections
+            if (BonA.Count > 0)
+            {
+                for (int i = 0; i < builderA.Triangles.Count() / 3; ++i)
+                {
+                    var va = builderA.Vertices[builderA.Triangles[i * 3 + 0]];
+                    var vb = builderA.Vertices[builderA.Triangles[i * 3 + 1]];
+                    var vc = builderA.Vertices[builderA.Triangles[i * 3 + 2]];
+
+                }
+            }
+
+            if (AonB.Count > 0)
+            {
+                for (int i = 0; i < builderB.Triangles.Count() / 3; ++i)
+                {
+                    var va = builderB.Vertices[builderB.Triangles[i * 3 + 0]];
+                    var vb = builderB.Vertices[builderB.Triangles[i * 3 + 1]];
+                    var vc = builderB.Vertices[builderB.Triangles[i * 3 + 2]];
+
+                }
+            }
+        }
 
     }
 }
