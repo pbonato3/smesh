@@ -337,6 +337,46 @@ namespace SMesh
             return false;
         }
 
+        private static bool CutBuilderFaces(ref FaceBuilder builder, Vector3 ptA, Vector3 ptB, double tol)
+        {
+            var ptA2d = SMMath.TransformTo2D(builder.To2D, ptA);
+            var ptB2d = SMMath.TransformTo2D(builder.To2D, ptB);
+
+            var seg = new Segment2(ptA2d, ptB2d);
+            var edges = new HashSet<Edge>();
+            var segments = new List<Segment2>();
+
+            for (int i = 0; i < builder.Triangles.Count; ++i)
+            {
+                for (int j = 0; j < 3; ++j)
+                {
+                    var indexA = builder.Triangles[i * 3 + j];
+                    var indexB = builder.Triangles[i * 3 + (j + 1) % 3];
+                    var edge = new Edge(Math.Min(indexA, indexB), Math.Max(indexA, indexB));
+
+                    if (edges.Contains(edge)) {
+                        continue;
+                    }
+
+                    edges.Add(edge);
+                    segments.Add(new Segment2(builder.Vertices2D[edge.A], builder.Vertices2D[edge.B]));
+                }
+            }
+
+            bool cut = false;
+
+            for(int i = 0; i<segments.Count; ++i)
+            {
+                Vector2 intersection;
+                if (SMMath.SegmentSegmentIntersection(seg, segments[i], out intersection))
+                {
+                    cut |= AddPointToBuilder(ref builder, SMMath.TransformTo3D(builder.To3D, intersection), tol);
+                }
+            }
+
+            return cut;
+        }
+
         private static void SplitBuilders(ref FaceBuilder builderA, ref FaceBuilder builderB, double tol) {
             // Points of intersection with the plane ( 0 to 3 )
             List<Vector3> AonB = new List<Vector3>();
@@ -390,26 +430,43 @@ namespace SMesh
                 }
             }
 
-            // TODO: Use AddPointToBuilder, then consider the edges intersections
             if (BonA.Count > 0)
             {
-                for (int i = 0; i < builderA.Triangles.Count() / 3; ++i)
-                {
-                    var va = builderA.Vertices[builderA.Triangles[i * 3 + 0]];
-                    var vb = builderA.Vertices[builderA.Triangles[i * 3 + 1]];
-                    var vc = builderA.Vertices[builderA.Triangles[i * 3 + 2]];
+                for (int p = 0; p < BonA.Count; ++p) {
+                    AddPointToBuilder(ref builderA, BonA[p], tol);
+                }
 
+                if (BonA.Count == 2)
+                {
+                    CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol);
+                    // TODO: add cuts
+                }
+                else if (BonA.Count == 3) {
+                    CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol);
+                    CutBuilderFaces(ref builderA, BonA[1], BonA[2], tol);
+                    CutBuilderFaces(ref builderA, BonA[2], BonA[0], tol);
+                    // TODO: add cuts
                 }
             }
 
             if (AonB.Count > 0)
             {
-                for (int i = 0; i < builderB.Triangles.Count() / 3; ++i)
+                for (int p = 0; p < AonB.Count; ++p)
                 {
-                    var va = builderB.Vertices[builderB.Triangles[i * 3 + 0]];
-                    var vb = builderB.Vertices[builderB.Triangles[i * 3 + 1]];
-                    var vc = builderB.Vertices[builderB.Triangles[i * 3 + 2]];
+                    AddPointToBuilder(ref builderB, AonB[p], tol);
+                }
 
+                if (BonA.Count == 2)
+                {
+                    CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol);
+                    // TODO: add cuts
+                }
+                else if (BonA.Count == 3)
+                {
+                    CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol);
+                    CutBuilderFaces(ref builderB, AonB[1], AonB[2], tol);
+                    CutBuilderFaces(ref builderB, AonB[2], AonB[0], tol);
+                    // TODO: add cuts
                 }
             }
         }
