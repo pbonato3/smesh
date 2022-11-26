@@ -20,14 +20,15 @@ namespace SMesh
 
             public List<Vector2> Vertices2D;
 
-            public List<int> cuts;
+            // Cuts, definded as vertices indices
+            public List<int> Cuts;
 
             public AABB BBox;
             public Plane FacePlane;
 
             public bool FromA;
             public bool Marked;
-            public bool inside;
+            public bool IsInside;
 
             public Matrix To2D;
             public Matrix To3D;
@@ -38,6 +39,55 @@ namespace SMesh
             public Vector2 FaceVertex2D(int nT, int nV)
             {
                 return Vertices2D[Triangles[nT * 3 + nV]];
+            }
+
+            public Vector2 ToLocal(Vector3 v) {
+                return SMMath.TransformTo2D(To2D, v);
+            }
+
+            public Vector3 ToWorld(Vector2 v)
+            {
+                return SMMath.TransformTo3D(To3D, v);
+            }
+
+            public bool TestCut(int idxA, int idxB, Vector3 testNormal) {
+                var ptA2d = Vertices2D[idxA];
+                var ptB2d = Vertices2D[idxB];
+                var dir = SMMath.Vector2Subtract(ptB2d, ptA2d);
+                var rightDir = new Vector2(dir.Y, -dir.X);
+                var testPt2d = SMMath.Vector2Add(ptA2d, rightDir);
+                var testPt3d = ToWorld(testPt2d);
+                var testDir = SMMath.Vector3Subtract(testPt3d, Vertices[idxA]);
+
+                return SMMath.Vector3Dot(testDir, testNormal) < 0;
+            }
+
+            public bool AddCut(int idxA, int idxB, bool invert) {
+                int a = idxA;
+                int b = idxB;
+                if (invert) {
+                    a = idxB;
+                    b = idxA;
+                }
+
+                for (int i = 0; i < Cuts.Count - 1; i += 2) {
+                    // If we have reversed cut, remove it
+                    if (Cuts[i] == b && Cuts[i + 1] == a)
+                    {
+                        Cuts.RemoveAt(i + 1);
+                        Cuts.RemoveAt(i);
+                        return false;
+                    }
+                    // If cut already exists, there is no need to add it again
+                    else if (Cuts[i] == a && Cuts[i + 1] == b) {
+                        return true;
+                    }
+
+                }
+                // Simply add the cut
+                Cuts.Add(a);
+                Cuts.Add(b);
+                return true;
             }
         }
 
@@ -240,12 +290,15 @@ namespace SMesh
         }
 
 
-        private static bool AddPointToBuilder(ref FaceBuilder builder, Vector3 pt, double tol){
+        private static bool AddPointToBuilder(ref FaceBuilder builder, Vector3 pt, double tol, out int newPt){
             var pt2d = SMMath.TransformTo2D(builder.To2D, pt);
+            // If point doesn't snap to an existing one, it will be always added as last one.
+            newPt = builder.Vertices2D.Count;
 
             // If vertex is colose enough to an existing one do nothing
             for (int i = 0; i < builder.Vertices2D.Count; ++i) {
                 if (SMMath.Vector2Distance(builder.Vertices2D[i], pt2d) <= tol) {
+                    newPt = i;
                     return true;
                 }
             }
@@ -337,8 +390,11 @@ namespace SMesh
             return false;
         }
 
-        private static bool CutBuilderFaces(ref FaceBuilder builder, Vector3 ptA, Vector3 ptB, double tol)
+        private static bool CutBuilderFaces(ref FaceBuilder builder, Vector3 ptA, Vector3 ptB, double tol, out int cutA, out int cutB)
         {
+            cutA = -1;
+            cutB = -1;
+
             var ptA2d = SMMath.TransformTo2D(builder.To2D, ptA);
             var ptB2d = SMMath.TransformTo2D(builder.To2D, ptB);
 
@@ -365,12 +421,27 @@ namespace SMesh
 
             bool cut = false;
 
-            for(int i = 0; i<segments.Count; ++i)
+            int addedPt;
+            Vector2 currCutA = ptB2d;
+            Vector2 currCutB = ptA2d;
+
+            for (int i = 0; i<segments.Count; ++i)
             {
                 Vector2 intersection;
                 if (SMMath.SegmentSegmentIntersection(seg, segments[i], out intersection))
                 {
-                    cut |= AddPointToBuilder(ref builder, SMMath.TransformTo3D(builder.To3D, intersection), tol);
+                    if (AddPointToBuilder(ref builder, SMMath.TransformTo3D(builder.To3D, intersection), tol, out addedPt)) {
+                        if (SMMath.Vector2Distance(ptA2d, builder.Vertices2D[addedPt]) < SMMath.Vector2Distance(ptA2d, currCutA)) {
+                            cutA = addedPt;
+                            currCutA = builder.Vertices2D[cutA];
+                        }
+                        if (SMMath.Vector2Distance(ptB2d, builder.Vertices2D[addedPt]) < SMMath.Vector2Distance(ptB2d, currCutB))
+                        {
+                            cutB = addedPt;
+                            currCutB = builder.Vertices2D[cutB];
+                        }
+                        cut = true;
+                    }
                 }
             }
 
@@ -433,19 +504,41 @@ namespace SMesh
             if (BonA.Count > 0)
             {
                 for (int p = 0; p < BonA.Count; ++p) {
-                    AddPointToBuilder(ref builderA, BonA[p], tol);
+                    int newPt;
+                    AddPointToBuilder(ref builderA, BonA[p], tol, out newPt);
                 }
 
                 if (BonA.Count == 2)
                 {
-                    CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol);
-                    // TODO: add cuts
-                }
-                else if (BonA.Count == 3) {
-                    CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol);
-                    CutBuilderFaces(ref builderA, BonA[1], BonA[2], tol);
-                    CutBuilderFaces(ref builderA, BonA[2], BonA[0], tol);
-                    // TODO: add cuts
+                    int cutA, cutB;
+                    if (CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol, out cutA, out cutB))
+                    {
+                        // Add cuts
+                        builderA.AddCut(cutA, cutB, builderA.TestCut(cutA, cutB, builderB.FacePlane.Normal));
+                    }
+                    else if (BonA.Count == 3)
+                    {
+                        var a = builderA.ToLocal(BonA[0]);
+                        var b = builderA.ToLocal(BonA[1]);
+                        var c = builderA.ToLocal(BonA[2]);
+                        var dirb = SMMath.Vector2Subtract(b, a);
+                        var dirc = SMMath.Vector2Subtract(c, a);
+                        var right = new Vector2(dirb.Y, -dirb.X);
+                        bool invert = SMMath.Vector2Dot(right, dirc) < 0;
+
+                        if (CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol, out cutA, out cutB))
+                        {
+                            builderA.AddCut(cutA, cutB, invert);
+                        }
+                        if (CutBuilderFaces(ref builderA, BonA[1], BonA[2], tol, out cutA, out cutB))
+                        {
+                            builderA.AddCut(cutA, cutB, invert);
+                        }
+                        if (CutBuilderFaces(ref builderA, BonA[2], BonA[0], tol, out cutA, out cutB))
+                        {
+                            builderA.AddCut(cutA, cutB, invert);
+                        }
+                    }
                 }
             }
 
@@ -453,19 +546,40 @@ namespace SMesh
             {
                 for (int p = 0; p < AonB.Count; ++p)
                 {
-                    AddPointToBuilder(ref builderB, AonB[p], tol);
+                    int newPt;
+                    AddPointToBuilder(ref builderB, AonB[p], tol, out newPt);
                 }
 
+                int cutA, cutB;
                 if (BonA.Count == 2)
                 {
-                    CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol);
-                    // TODO: add cuts
+                    if (CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol, out cutA, out cutB))
+                    {
+                        builderB.AddCut(cutA, cutB, builderB.TestCut(cutA, cutB, builderA.FacePlane.Normal));
+                    }
                 }
                 else if (BonA.Count == 3)
                 {
-                    CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol);
-                    CutBuilderFaces(ref builderB, AonB[1], AonB[2], tol);
-                    CutBuilderFaces(ref builderB, AonB[2], AonB[0], tol);
+                    var a = builderB.ToLocal(AonB[0]);
+                    var b = builderB.ToLocal(AonB[1]);
+                    var c = builderB.ToLocal(AonB[2]);
+                    var dirb = SMMath.Vector2Subtract(b, a);
+                    var dirc = SMMath.Vector2Subtract(c, a);
+                    var right = new Vector2(dirb.Y, -dirb.X);
+                    bool invert = SMMath.Vector2Dot(right, dirc) < 0;
+
+                    if (CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol, out cutA, out cutB))
+                    {
+                        builderB.AddCut(cutA, cutB, invert);
+                    }
+                    if (CutBuilderFaces(ref builderB, AonB[1], AonB[2], tol, out cutA, out cutB))
+                    {
+                        builderB.AddCut(cutA, cutB, invert);
+                    }
+                    if (CutBuilderFaces(ref builderB, AonB[2], AonB[0], tol, out cutA, out cutB))
+                    {
+                        builderB.AddCut(cutA, cutB, invert);
+                    }
                     // TODO: add cuts
                 }
             }
