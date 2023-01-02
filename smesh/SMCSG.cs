@@ -33,12 +33,19 @@ namespace SMesh
             public Matrix To2D;
             public Matrix To3D;
 
+            public FaceBuilder() { 
+                Vertices = new List<Vector3>();
+                Vertices2D = new List<Vector2>();
+                Triangles = new List<int>();
+                Cuts = new List<int>();
+            }
+
             public Vector3 FaceVertex(int nT, int nV) {
-                return Vertices[Triangles[nT * 3 + nV]];
+                return new Vector3(Vertices[Triangles[nT * 3 + nV]]);
             }
             public Vector2 FaceVertex2D(int nT, int nV)
             {
-                return Vertices2D[Triangles[nT * 3 + nV]];
+                return new Vector2(Vertices2D[Triangles[nT * 3 + nV]]);
             }
 
             public Vector2 ToLocal(Vector3 v) {
@@ -93,23 +100,25 @@ namespace SMesh
 
 
 
-        public void Split(ref Mesh meshA, ref Mesh meshB, double tol = 0.00001) { 
+        public static Mesh Split(Mesh meshA, Mesh meshB, double tol = 0.00001) { 
             FaceBuilder[] buildersA = new FaceBuilder[meshA.FaceCount];
             FaceBuilder[] buildersB = new FaceBuilder[meshB.FaceCount];
 
             // init builders for mesh A
             for (int f = 0; f < meshA.FaceCount; f++)
             {
+                buildersA[f] = new FaceBuilder();
+
                 var a = meshA.Vertices[meshA.Indices[f * 3 + 0]];
                 var b = meshA.Vertices[meshA.Indices[f * 3 + 1]];
                 var c = meshA.Vertices[meshA.Indices[f * 3 + 2]];
 
-                var na = meshA.Vertices[meshA.Indices[f * 3 + 0]];
-                var nb = meshA.Vertices[meshA.Indices[f * 3 + 1]];
-                var nc = meshA.Vertices[meshA.Indices[f * 3 + 2]];
+                //var na = meshA.Normals[meshA.Indices[f * 3 + 0]];
+                //var nb = meshA.Normals[meshA.Indices[f * 3 + 1]];
+                //var nc = meshA.Normals[meshA.Indices[f * 3 + 2]];
 
                 buildersA[f].Vertices = new List<Vector3>(3) { a, b, c };
-                buildersA[f].Normals = new List<Vector3>(3) { na, nb, nc };
+                //buildersA[f].Normals = new List<Vector3>(3) { na, nb, nc };
                 buildersA[f].Triangles = new List<int>(3) { 0, 1, 2 };
 
                 buildersA[f].BBox = ThreePointsAABB(a, b, c);
@@ -118,16 +127,18 @@ namespace SMesh
             // init builders for mesh B
             for (int f = 0; f < meshB.FaceCount; f++)
             {
+                buildersB[f] = new FaceBuilder();
+
                 var a = meshB.Vertices[meshB.Indices[f * 3 + 0]];
                 var b = meshB.Vertices[meshB.Indices[f * 3 + 1]];
                 var c = meshB.Vertices[meshB.Indices[f * 3 + 2]];
 
-                var na = meshB.Vertices[meshB.Indices[f * 3 + 0]];
-                var nb = meshB.Vertices[meshB.Indices[f * 3 + 1]];
-                var nc = meshB.Vertices[meshB.Indices[f * 3 + 2]];
+                //var na = meshB.Normals[meshB.Indices[f * 3 + 0]];
+                //var nb = meshB.Normals[meshB.Indices[f * 3 + 1]];
+                //var nc = meshB.Normals[meshB.Indices[f * 3 + 2]];
 
                 buildersB[f].Vertices = new List<Vector3>(3) { a, b, c };
-                buildersB[f].Normals = new List<Vector3>(3) { na, nb, nc };
+               // buildersB[f].Normals = new List<Vector3>(3) { na, nb, nc };
                 buildersB[f].Triangles = new List<int>(3) { 0, 1, 2 };
 
                 buildersB[f].BBox = ThreePointsAABB(a, b, c);
@@ -147,6 +158,7 @@ namespace SMesh
                 for (int c = 0; c < collisions.Count; c++) {
                     var builderB = buildersB[collisions[c]];
 
+                    // TODO: Do not recompute plane
                     // Note: in Vertices 0, 1, 2 there will always be the original triangle
                     builderA.FacePlane = SMMath.PlaneFrom3Points(builderA.Vertices[0], builderA.Vertices[1], builderA.Vertices[2]);
                     builderB.FacePlane = SMMath.PlaneFrom3Points(builderB.Vertices[0], builderB.Vertices[1], builderB.Vertices[2]);
@@ -154,127 +166,35 @@ namespace SMesh
                     SplitBuilders(ref builderA, ref builderB, tol);
                 }
             }
+
+            List<FaceBuilder> outbuild = new List<FaceBuilder>();
+            foreach (var b in buildersA) {
+                outbuild.Add(b);
+            }
+            //foreach (var b in buildersB)
+            //{
+            //    outbuild.Add(b);
+            //}
+            return BuildUnindexedMesh(outbuild.ToArray());
         }
 
 
-        private static void AddPointsToFaceBuilder(List<Vector3> points, ref FaceBuilder builder, double tol) {
-            if (points.Count == 0) {
+        private static void Init2DSpace(ref FaceBuilder builder) {
+            if (builder.Vertices2D.Count == builder.Vertices.Count) {
                 return;
             }
+
+            builder.FacePlane = SMMath.PlaneFrom3Points(builder.Vertices[0], builder.Vertices[1], builder.Vertices[2]);
+            builder.Vertices2D = new List<Vector2>();
 
             // Get transformation to and from local 2d triangle
             SMMath.PlaneTransformations(builder.FacePlane, builder.Vertices[0], builder.Vertices[1], out builder.To3D, out builder.To2D);
 
-            // Convert all veritces to local 2d space
-            builder.Vertices2D = new List<Vector2>(builder.Vertices.Count);
-            for (int i = 0; i < builder.Vertices.Count; ++i)
-            {
-                builder.Vertices2D[i] = SMMath.TransformTo2D(builder.To2D, builder.Vertices[i]);
+            for (int i = 0; i < builder.Vertices.Count; i++) {
+                builder.Vertices2D.Add(builder.ToLocal(builder.Vertices[i]));
             }
-
-            // Convert all intersection points to local 2d space
-            var points2D = new List<Vector2>(points.Count);
-            for (int i = 0; i < points.Count; ++i)
-            {
-                points2D[i] = SMMath.TransformTo2D(builder.To2D, points[i]);
-            }
-
-            // Prepare a list of triangles to add and one of triangles to delte
-            var trianglesToAdd = new List<int>();
-            var trianglesToDelte = new List<int>();
-
-            // Just on point
-            if (points2D.Count == 1) {
-                // If it is on an existing point do nothing
-                for (int i = 0; i < builder.Vertices2D.Count; ++i) {
-                    if (SMMath.AreEquals(points2D[0], builder.Vertices2D[0], tol)) {
-                        return;
-                    }
-                }
-
-                // TODO: avoid unecessary checks
-                // Check if the point is on a segment
-                Vector2 res;
-                for (int i = 0; i < builder.Triangles.Count / 3; ++i)
-                {
-                    var a = builder.Triangles[i * 3 + 0];
-                    var b = builder.Triangles[i * 3 + 1];
-                    var c = builder.Triangles[i * 3 + 2];
-                    var va = builder.Vertices2D[a];
-                    var vb = builder.Vertices2D[b];
-                    var vc = builder.Vertices2D[c];
-
-                    if (SMMath.GetPointOnSegment(points2D[0], va, vb, tol, out res)) {
-                        var d = builder.Vertices.Count;
-                        trianglesToDelte.Add(i);
-                        builder.Vertices2D.Add(res);
-                        builder.Vertices.Add(SMMath.TransformTo3D(builder.To3D, res));
-                        trianglesToAdd.Append(a);
-                        trianglesToAdd.Append(d);
-                        trianglesToAdd.Append(c);
-
-                        trianglesToAdd.Append(b);
-                        trianglesToAdd.Append(c);
-                        trianglesToAdd.Append(d);
-                        continue;
-                    }
-
-                    // TODO: the code above should be repeated 3 times, avoid code duplications 
-                }
-
-                // If we added to a segment, apply changes and return
-                if (trianglesToAdd.Count > 0) {
-                    trianglesToDelte.Sort();
-                    trianglesToDelte.Reverse();
-                    foreach (var idx in trianglesToDelte) {
-                        builder.Triangles.RemoveAt(idx * 3 + 2);
-                        builder.Triangles.RemoveAt(idx * 3 + 1);
-                        builder.Triangles.RemoveAt(idx * 3 + 0);
-                    }
-                    foreach (var idx in trianglesToAdd) { 
-                        builder.Triangles.Add(idx);
-                    }
-                    return;
-                }
-
-                // Check if the point is inside one of the triangles
-                for (int i = 0; i < builder.Triangles.Count / 3; ++i)
-                {
-                    var a = builder.Triangles[i * 3 + 0];
-                    var b = builder.Triangles[i * 3 + 1];
-                    var c = builder.Triangles[i * 3 + 2];
-                    var va = builder.Vertices2D[a];
-                    var vb = builder.Vertices2D[b];
-                    var vc = builder.Vertices2D[c];
-
-                    if (SMMath.IsPointInTriangle(points2D[0], va, vb, vc)) {
-                        var d = builder.Vertices.Count;
-                        trianglesToDelte.Add(i);
-                        builder.Vertices2D.Add(points2D[0]);
-                        builder.Vertices.Add(SMMath.TransformTo3D(builder.To3D, points2D[0]));
-
-                        builder.Triangles.RemoveAt(i * 3 + 2);
-                        builder.Triangles.RemoveAt(i * 3 + 1);
-                        builder.Triangles.RemoveAt(i * 3 + 0);
-
-                        builder.Triangles.Add(a);
-                        builder.Triangles.Add(b);
-                        builder.Triangles.Add(d);
-
-                        builder.Triangles.Add(b);
-                        builder.Triangles.Add(c);
-                        builder.Triangles.Add(d);
-
-                        builder.Triangles.Add(c);
-                        builder.Triangles.Add(a);
-                        builder.Triangles.Add(d);
-                        return;
-                    }
-                }
-            }
-
-            // TODO: this is becoming too much complex, try to simplify a little
         }
+
 
         private static AABB ThreePointsAABB(Vector3 a, Vector3 b, Vector3 c) {
             AABB bbox = new AABB();
@@ -291,7 +211,10 @@ namespace SMesh
 
 
         private static bool AddPointToBuilder(ref FaceBuilder builder, Vector3 pt, double tol, out int newPt){
-            var pt2d = SMMath.TransformTo2D(builder.To2D, pt);
+            // If not already inited, init 2D space
+            Init2DSpace(ref builder);
+
+            var pt2d = builder.ToLocal(pt);
             // If point doesn't snap to an existing one, it will be always added as last one.
             newPt = builder.Vertices2D.Count;
 
@@ -303,10 +226,11 @@ namespace SMesh
                 }
             }
 
-            for (int i = 0; i < builder.Triangles.Count; ++i)
+            for (int i = 0; i < builder.Triangles.Count / 3; ++i)
             {
                 for (int j = 0; j < 3; ++j)
                 {
+                    // Closest is NaN here!!!!!!!!!!!!!!!!!!!
                     var closest = SMMath.SegmentClosestPoint(pt2d, new Segment2(builder.FaceVertex2D(i, j), builder.FaceVertex2D(i, (j + 1) % 3)));
                     if (SMMath.Vector2Distance(closest, pt2d) > tol)
                     {
@@ -314,13 +238,14 @@ namespace SMesh
                     }
 
                     // TODO: is it correct to add the closest?
-                    builder.Vertices.Add(SMMath.TransformTo3D(builder.To3D, closest));
+                    builder.Vertices.Add(builder.ToWorld(closest));
                     builder.Vertices2D.Add(closest);
                     int vertIdx = builder.Vertices.Count - 1;
 
+                    int other = -1;
                     bool foundOther = false;
                     // Check if one of the remaining triangles shares the splitted edge
-                    for (int ii = i + 1; ii < builder.Triangles.Count; ++ii)
+                    for (int ii = i + 1; ii < builder.Triangles.Count / 3; ++ii)
                     {
                         for (int jj = 0; jj < 3; ++jj)
                         {
@@ -335,9 +260,7 @@ namespace SMesh
                                 builder.Triangles.Add(builder.Triangles[vertIdx]);
                                 builder.Triangles.Add(builder.Triangles[ii * 3 + (jj + 1) % 3]);
 
-                                builder.Triangles.RemoveAt(ii * 3);
-                                builder.Triangles.RemoveAt(ii * 3);
-                                builder.Triangles.RemoveAt(ii * 3);
+                                other = ii;
 
                                 foundOther = true; break;
                             }
@@ -349,15 +272,31 @@ namespace SMesh
 
                     builder.Triangles.Add(builder.Triangles[i * 3 + (j + 2) % 3]);
                     builder.Triangles.Add(builder.Triangles[i * 3 + j]);
-                    builder.Triangles.Add(builder.Triangles[vertIdx]);
+                    builder.Triangles.Add(vertIdx);
 
                     builder.Triangles.Add(builder.Triangles[i * 3 + (j + 2) % 3]);
-                    builder.Triangles.Add(builder.Triangles[vertIdx]);
+                    builder.Triangles.Add(vertIdx);
                     builder.Triangles.Add(builder.Triangles[i * 3 + (j + 1) % 3]);
 
-                    builder.Triangles.RemoveAt(i * 3);
-                    builder.Triangles.RemoveAt(i * 3);
-                    builder.Triangles.RemoveAt(i * 3);
+                    if (foundOther)
+                    {
+                        var min = Math.Min(i, other);
+                        var max = Math.Max(i, other);
+                        builder.Triangles.RemoveAt(max * 3);
+                        builder.Triangles.RemoveAt(max * 3);
+                        builder.Triangles.RemoveAt(max * 3);
+                        builder.Triangles.RemoveAt(min * 3);
+                        builder.Triangles.RemoveAt(min * 3);
+                        builder.Triangles.RemoveAt(min * 3);
+                    }
+                    else
+                    {
+                        builder.Triangles.RemoveAt(i * 3);
+                        builder.Triangles.RemoveAt(i * 3);
+                        builder.Triangles.RemoveAt(i * 3);
+                    }
+
+
 
                     return true;
                 }
@@ -384,6 +323,7 @@ namespace SMesh
                     builder.Triangles.RemoveAt(i * 3);
                     builder.Triangles.RemoveAt(i * 3);
                     builder.Triangles.RemoveAt(i * 3);
+
                     return true;
                 }
             }
@@ -395,14 +335,17 @@ namespace SMesh
             cutA = -1;
             cutB = -1;
 
-            var ptA2d = SMMath.TransformTo2D(builder.To2D, ptA);
-            var ptB2d = SMMath.TransformTo2D(builder.To2D, ptB);
+            var ptA2d = builder.ToLocal(ptA);
+            var ptB2d = builder.ToLocal(ptB);
+
+            var testA = builder.ToWorld(ptA2d);
+            var testB = builder.ToWorld(ptB2d);
 
             var seg = new Segment2(ptA2d, ptB2d);
             var edges = new HashSet<Edge>();
             var segments = new List<Segment2>();
 
-            for (int i = 0; i < builder.Triangles.Count; ++i)
+            for (int i = 0; i < builder.Triangles.Count / 3; ++i)
             {
                 for (int j = 0; j < 3; ++j)
                 {
@@ -422,23 +365,23 @@ namespace SMesh
             bool cut = false;
 
             int addedPt;
-            Vector2 currCutA = ptB2d;
-            Vector2 currCutB = ptA2d;
+            Vector2 currCutA = new Vector2(ptB2d);
+            Vector2 currCutB = new Vector2(ptA2d);
 
             for (int i = 0; i<segments.Count; ++i)
             {
                 Vector2 intersection;
                 if (SMMath.SegmentSegmentIntersection(seg, segments[i], out intersection))
                 {
-                    if (AddPointToBuilder(ref builder, SMMath.TransformTo3D(builder.To3D, intersection), tol, out addedPt)) {
-                        if (SMMath.Vector2Distance(ptA2d, builder.Vertices2D[addedPt]) < SMMath.Vector2Distance(ptA2d, currCutA)) {
+                    if (AddPointToBuilder(ref builder, builder.ToWorld(intersection), tol, out addedPt)) {
+                        if (SMMath.Vector2Distance(ptA2d, builder.Vertices2D[addedPt]) <= SMMath.Vector2Distance(ptA2d, currCutA)) {
                             cutA = addedPt;
-                            currCutA = builder.Vertices2D[cutA];
+                            currCutA = new Vector2(builder.Vertices2D[cutA]);
                         }
-                        if (SMMath.Vector2Distance(ptB2d, builder.Vertices2D[addedPt]) < SMMath.Vector2Distance(ptB2d, currCutB))
+                        if (SMMath.Vector2Distance(ptB2d, builder.Vertices2D[addedPt]) <= SMMath.Vector2Distance(ptB2d, currCutB))
                         {
                             cutB = addedPt;
-                            currCutB = builder.Vertices2D[cutB];
+                            currCutB = new Vector2(builder.Vertices2D[cutB]);
                         }
                         cut = true;
                     }
@@ -551,14 +494,14 @@ namespace SMesh
                 }
 
                 int cutA, cutB;
-                if (BonA.Count == 2)
+                if (AonB.Count == 2)
                 {
                     if (CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol, out cutA, out cutB))
                     {
                         builderB.AddCut(cutA, cutB, builderB.TestCut(cutA, cutB, builderA.FacePlane.Normal));
                     }
                 }
-                else if (BonA.Count == 3)
+                else if (AonB.Count == 3)
                 {
                     var a = builderB.ToLocal(AonB[0]);
                     var b = builderB.ToLocal(AonB[1]);
@@ -580,10 +523,107 @@ namespace SMesh
                     {
                         builderB.AddCut(cutA, cutB, invert);
                     }
-                    // TODO: add cuts
                 }
             }
         }
 
+
+        private static void MarkBuilderFaces(ref FaceBuilder builder) {
+            if (builder.Cuts.Count == 0) {
+                return;
+            }
+
+            for (int i = 0; i < builder.Triangles.Count / 3; ++i) {
+                var a = builder.FaceVertex2D(i, 0);
+                var b = builder.FaceVertex2D(i, 1);
+                var c = builder.FaceVertex2D(i, 2);
+
+                var center = SMMath.Vector2Scale(SMMath.Vector2Add(SMMath.Vector2Add(a, b), c), 1/3);
+
+                var minDist = Double.MaxValue;
+                for (int j = 0; j < builder.Cuts.Count / 2; ++j)
+                {
+                    var ca = builder.Vertices2D[builder.Cuts[j * 2 + 0]];
+                    var cb = builder.Vertices2D[builder.Cuts[j * 2 + 1]];
+
+                    var ccenter = SMMath.Vector2Scale(SMMath.Vector2Add(ca, cb), 0.5);
+                    var dist = SMMath.Vector2Distance(center, ccenter);
+                    
+                    if (dist < minDist) {
+                        minDist = dist;
+
+                        var cutDir = SMMath.Vector2Subtract(ca, cb);
+                        var rightDir = new Vector2(cutDir.Y, -cutDir.X);
+                        var testVec = SMMath.Vector2Subtract(ccenter, center);
+
+                        builder.IsInside = SMMath.Vector2Dot(rightDir, testVec) > 0;
+                        builder.Marked = true;
+                    }
+
+                }
+            }
+        }
+
+
+        private static Mesh BuildUnindexedMesh(FaceBuilder[] builders)
+        {
+            Mesh mesh = new Mesh();
+            var vertices = new List<Vector3>();
+            var indices = new List<int>();
+
+            foreach (var builder in builders) {
+                for (int i = 0; i < builder.Triangles.Count / 3; ++i) {
+                    for (int j = 0; j < 3; ++j)
+                    {
+                        indices.Add(indices.Count);
+                        vertices.Add(builder.FaceVertex(i, j));
+                    }
+                }
+            }
+
+            mesh.VertCount = vertices.Count;
+            mesh.Vertices = vertices.ToArray();
+            mesh.FaceCount = indices.Count / 3;
+            mesh.Indices = indices.ToArray();
+
+            RebuildNormals(ref mesh);
+
+            return mesh;
+        }
+
+        private static void RebuildNormals(ref Mesh mesh) {
+            mesh.Normals = new Vector3[mesh.Vertices.Length];
+            var count = new int[mesh.Vertices.Length];
+            for (int i = 0; i < count.Length; i++) { 
+                count[i] = 0;
+            }
+
+            for (int i = 0; i < mesh.FaceCount; ++i) { 
+                var a = mesh.Indices[i * 3 + 0];
+                var b = mesh.Indices[i * 3 + 1];
+                var c = mesh.Indices[i * 3 + 2];
+
+                var va = mesh.Vertices[a];
+                var vb = mesh.Vertices[b];
+                var vc = mesh.Vertices[c];
+
+                var vab = SMMath.Vector3Subtract(vb, va);
+                var vac = SMMath.Vector3Subtract(vc, va);
+                var norm = SMMath.Vector3Normal(SMMath.Vector3Cross(vab, vac));
+
+                mesh.Normals[a] = SMMath.Vector3Add(mesh.Normals[a], norm);
+                mesh.Normals[b] = SMMath.Vector3Add(mesh.Normals[b], norm);
+                mesh.Normals[c] = SMMath.Vector3Add(mesh.Normals[c], norm);
+
+                count[a]++;
+                count[b]++;
+                count[c]++;
+            }
+
+            for (int i = 0; i < count.Length; i++)
+            {
+                mesh.Normals[i] = SMMath.Vector3Scale(mesh.Normals[i], 1 / count[i]);
+            }
+        }
     }
 }

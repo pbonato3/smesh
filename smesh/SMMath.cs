@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace SMesh
@@ -119,14 +120,13 @@ namespace SMesh
         }
 
 
-        public static Vector3 TransformTo3D(Matrix m, Vector2 vec)
+        public static Vector3 TransformTo3D(Matrix m, Vector2 v)
         {
-            Vector3 v = new Vector3(vec.X, vec.Y, 0);
             var o = new Vector3();
 
-            o.X = v.X * m.M00 + v.Y * m.M01 + v.Z * m.M02 + m.M03;
-            o.Y = v.X * m.M10 + v.Y * m.M11 + v.Z * m.M12 + m.M13;
-            o.Z = v.X * m.M20 + v.Y * m.M21 + v.Z * m.M22 + m.M23;
+            o.X = v.X * m.M00 + v.Y * m.M01 + m.M03;
+            o.Y = v.X * m.M10 + v.Y * m.M11 + m.M13;
+            o.Z = v.X * m.M20 + v.Y * m.M21 + m.M23;
 
             return o;
         }
@@ -143,8 +143,7 @@ namespace SMesh
 
         public static void PlaneTransformations(Plane plane, Vector3 origin, Vector3 xPoint, out Matrix toWorld, out Matrix toLocal) {
             toWorld = IdentityMatrix();
-            toLocal = IdentityMatrix();
-
+            
             var xdir = Vector3Normal(Vector3Subtract(xPoint, origin));
             var ydir = Vector3Normal(Vector3Cross(xdir, plane.Normal));
 
@@ -160,15 +159,127 @@ namespace SMesh
             toWorld.M21 = plane.Normal.Y;
             toWorld.M22 = plane.Normal.Z;
 
+            toWorld.M03 = origin.X;
+            toWorld.M13 = origin.Y;
+            toWorld.M23 = origin.Z;
+            
+
+            /*
+            var xdir = Vector3Normal(Vector3Subtract(xPoint, origin));
+            var ydir = Vector3Normal(Vector3Cross(xdir, plane.Normal));
+
+            var xpt = SMMath.Vector3Add(origin, xdir);
+            var ypt = SMMath.Vector3Add(origin, ydir);
+            var vec = SMMath.Vector3Normal(SMMath.Vector3Subtract(xpt, ypt));
+            var cross = SMMath.Vector3Cross(vec, plane.Normal);
+
+            toWorld.M00 = cross.X;
+            toWorld.M01 = cross.Y;
+            toWorld.M02 = cross.Z;
+
+            toWorld.M10 = vec.X;
+            toWorld.M11 = vec.Y;
+            toWorld.M12 = vec.Z;
+
+            toWorld.M20 = plane.Normal.X;
+            toWorld.M21 = plane.Normal.Y;
+            toWorld.M22 = plane.Normal.Z;
+
             toWorld.M30 = origin.X;
             toWorld.M31 = origin.Y;
-            toWorld.M32 = origin.Z;
+            toWorld.M32 = origin.Z;*/
 
             toLocal = InvertMatrix(toWorld);
         }
 
+        /* Probably not needed anymore*/
+        public static Matrix AffineInverse(Matrix mat) {
+            Matrix result = new Matrix();
+
+            double co00 = mat.M11 * mat.M22 - mat.M12 * mat.M21;
+            double co10 = mat.M12 * mat.M20 - mat.M10 * mat.M22;
+            double co20 = mat.M10 * mat.M21 - mat.M11 * mat.M20;
+            
+            double co01 = mat.M02 * mat.M21 - mat.M01 * mat.M22;
+            double co11 = mat.M00 * mat.M22 - mat.M02 * mat.M20;
+            double co21 = mat.M01 * mat.M20 - mat.M00 * mat.M21;
+
+            double co02 = mat.M01 * mat.M12 - mat.M02 * mat.M11;
+            double co12 = mat.M02 * mat.M10 - mat.M00 * mat.M21;
+            double co22 = mat.M00 * mat.M11 - mat.M01 * mat.M10;
+
+            double det = mat.M00 * co00 + mat.M01 * co10 + mat.M02 * co20;
+
+            double invdet = 1.0 / det;
+
+            result.M00 = co00 * invdet;
+            result.M01 = co01 * invdet;
+            result.M02 = co02 * invdet;
+            result.M10 = co10 * invdet;
+            result.M11 = co11 * invdet;
+            result.M12 = co12 * invdet;
+            result.M20 = co20 * invdet;
+            result.M21 = co21 * invdet;
+            result.M22 = co22 * invdet;
+
+            Vector3 origin = new Vector3(-mat.M03, -mat.M13, -mat.M23);
+            Vector3 v = Transform(result, origin);
+
+            result.M03 = v.X;
+            result.M13 = v.Y;
+            result.M23 = v.Z;
+
+            return result;
+        }
+
+
         public static Matrix InvertMatrix(Matrix mat)
         {
+            /*
+            Matrix mat = new Matrix();
+
+            double s0 = m.M00 * m.M11 - m.M10 * m.M01;
+            double s1 = m.M00 * m.M12 - m.M10 * m.M02;
+            double s2 = m.M00 * m.M13 - m.M10 * m.M03;
+            double s3 = m.M01 * m.M12 - m.M11 * m.M02;
+            double s4 = m.M01 * m.M13 - m.M11 * m.M03;
+            double s5 = m.M02 * m.M13 - m.M12 * m.M03;
+
+            double c5 = m.M22 * m.M33 - m.M32 * m.M23;
+            double c4 = m.M21 * m.M33 - m.M31 * m.M23;
+            double c3 = m.M21 * m.M32 - m.M31 * m.M22;
+            double c2 = m.M20 * m.M33 - m.M30 * m.M23;
+            double c1 = m.M20 * m.M32 - m.M30 * m.M22;
+            double c0 = m.M20 * m.M31 - m.M30 * m.M21;
+
+            // Should check for 0 determinant
+
+            double invdet = 1.0 / (s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0);
+
+            mat.M00 = (m.M11 * c5 - m.M12 * c4 + m.M13 * c3) * invdet;
+            mat.M01 = (-m.M01 * c5 + m.M02 * c4 - m.M03 * c3) * invdet;
+            mat.M02 = (m.M31 * s5 - m.M32 * s4 + m.M33 * s3) * invdet;
+            mat.M03 = (-m.M21 * s5 + m.M22 * s4 - m.M23 * s3) * invdet;
+
+            mat.M10 = (-m.M10 * c5 + m.M12 * c2 - m.M13 * c1) * invdet;
+            mat.M11 = (m.M00 * c5 - m.M02 * c2 + m.M03 * c1) * invdet;
+            mat.M12 = (-m.M30 * s5 + m.M32 * s2 - m.M33 * s1) * invdet;
+            mat.M13 = (m.M20 * s5 - m.M22 * s2 + m.M23 * s1) * invdet;
+
+            mat.M20 = (m.M10 * c4 - m.M11 * c2 + m.M13 * c0) * invdet;
+            mat.M21 = (-m.M00 * c4 + m.M01 * c2 - m.M03 * c0) * invdet;
+            mat.M22 = (m.M30 * s4 - m.M31 * s2 + m.M33 * s0) * invdet;
+            mat.M23 = (-m.M20 * s4 + m.M21 * s2 - m.M23 * s0) * invdet;
+
+            mat.M30 = (-m.M10 * c3 + m.M11 * c1 - m.M12 * c0) * invdet;
+            mat.M31 = (m.M00 * c3 - m.M01 * c1 + m.M02 * c0) * invdet;
+            mat.M32 = (-m.M30 * s3 + m.M31 * s1 - m.M32 * s0) * invdet;
+            mat.M33 = (m.M20 * s3 - m.M21 * s1 + m.M22 * s0) * invdet;
+
+            return mat;
+            */
+
+            
             Matrix result = new Matrix();
 
             // Cache the matrix values (speed optimization)
@@ -191,26 +302,29 @@ namespace SMesh
             double b11 = a22 * a33 - a23 * a32;
 
             // Calculate the invert determinant (inlined to avoid double-caching)
-            double invDet = 1.0f / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+            double invDet = 1.0 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
 
+
+            //  row and columns inverted?!?!?!
             result.M00 = (a11 * b11 - a12 * b10 + a13 * b09) * invDet;
-            result.M10 = (-a01 * b11 + a02 * b10 - a03 * b09) * invDet;
-            result.M20 = (a31 * b05 - a32 * b04 + a33 * b03) * invDet;
-            result.M30 = (-a21 * b05 + a22 * b04 - a23 * b03) * invDet;
-            result.M01 = (-a10 * b11 + a12 * b08 - a13 * b07) * invDet;
-            result.M11 = (a00 * b11 - a02 * b08 + a03 * b07) * invDet;
-            result.M21 = (-a30 * b05 + a32 * b02 - a33 * b01) * invDet;
-            result.M31 = (a20 * b05 - a22 * b02 + a23 * b01) * invDet;
-            result.M02 = (a10 * b10 - a11 * b08 + a13 * b06) * invDet;
-            result.M12 = (-a00 * b10 + a01 * b08 - a03 * b06) * invDet;
-            result.M22 = (a30 * b04 - a31 * b02 + a33 * b00) * invDet;
-            result.M32 = (-a20 * b04 + a21 * b02 - a23 * b00) * invDet;
-            result.M03 = (-a10 * b09 + a11 * b07 - a12 * b06) * invDet;
-            result.M13 = (a00 * b09 - a01 * b07 + a02 * b06) * invDet;
-            result.M23 = (-a30 * b03 + a31 * b01 - a32 * b00) * invDet;
-            result.M33 = (a20 * b03 - a21 * b01 + a22 * b00) * invDet;
+            result.M01 = (-a01 * b11 + a02 * b10 - a03 * b09) * invDet;
+            result.M02= (a31 * b05 - a32 * b04 + a33 * b03) * invDet;
+            result.M03= (-a21 * b05 + a22 * b04 - a23 * b03) * invDet;
+            result.M10= (-a10 * b11 + a12 * b08 - a13 * b07) * invDet;
+            result.M11= (a00 * b11 - a02 * b08 + a03 * b07) * invDet;
+            result.M12= (-a30 * b05 + a32 * b02 - a33 * b01) * invDet;
+            result.M13= (a20 * b05 - a22 * b02 + a23 * b01) * invDet;
+            result.M20= (a10 * b10 - a11 * b08 + a13 * b06) * invDet;
+            result.M21= (-a00 * b10 + a01 * b08 - a03 * b06) * invDet;
+            result.M22= (a30 * b04 - a31 * b02 + a33 * b00) * invDet;
+            result.M23= (-a20 * b04 + a21 * b02 - a23 * b00) * invDet;
+            result.M30= (-a10 * b09 + a11 * b07 - a12 * b06) * invDet;
+            result.M31= (a00 * b09 - a01 * b07 + a02 * b06) * invDet;
+            result.M32= (-a30 * b03 + a31 * b01 - a32 * b00) * invDet;
+            result.M33= (a20 * b03 - a21 * b01 + a22 * b00) * invDet;
 
             return result;
+            
         }
 
 
@@ -220,7 +334,7 @@ namespace SMesh
             var minX = Math.Min(s.A.X, s.B.X);
             var maxX = Math.Max(s.A.X, s.B.X);
 
-            var minY = Math.Max(s.A.Y, s.B.Y);
+            var minY = Math.Min(s.A.Y, s.B.Y);
             var maxY = Math.Max(s.A.Y, s.B.Y);
 
             return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY;
@@ -231,10 +345,10 @@ namespace SMesh
             var minX = Math.Min(s.A.X, s.B.X);
             var maxX = Math.Max(s.A.X, s.B.X);
 
-            var minY = Math.Max(s.A.Y, s.B.Y);
+            var minY = Math.Min(s.A.Y, s.B.Y);
             var maxY = Math.Max(s.A.Y, s.B.Y);
 
-            var minZ = Math.Max(s.A.Z, s.B.Z);
+            var minZ = Math.Min(s.A.Z, s.B.Z);
             var maxZ = Math.Max(s.A.Z, s.B.Z);
 
             return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY && pt.Z >= minZ && pt.Z <= maxZ;
@@ -284,16 +398,25 @@ namespace SMesh
         public static Vector3 LineClosestPoint(Vector3 pt, Segment3 seg)
         {
             var AB = Vector3Subtract(seg.B, seg.A);
+            var segLen = Vector3Dot(AB, AB);
+            if (segLen == 0) {
+                return seg.A;
+            }
             var AP = Vector3Subtract(pt, seg.A);
-            double t = Vector3Dot(AP, AB) / Vector3Dot(AB, AB);
+            double t = Vector3Dot(AP, AB) / segLen;
             return Vector3Add(seg.A, Vector3Scale(AB, t));
         }
 
         public static Vector2 SegmentClosestPoint(Vector2 pt, Segment2 seg)
         {
             var AB = Vector2Subtract(seg.B, seg.A);
+            var segLen = Vector2Dot(AB, AB);
+            if (segLen * segLen < 0.0000001)
+            {
+                return seg.A;
+            }
             var AP = Vector2Subtract(pt, seg.A);
-            double t = Vector2Dot(AP, AB) / Vector2Dot(AB, AB);
+            double t = Vector2Dot(AP, AB) / segLen;
             if (t <= 0) { return seg.A; }
             if (t >= 1) { return seg.B; }
             return Vector2Add(seg.A, Vector2Scale(AB, t));
@@ -342,10 +465,24 @@ namespace SMesh
         public static bool LineLineIntersection(Segment2 l0, Segment2 l1, out Vector2 pt) {
             pt = new Vector2();
 
-            var M0 = (l0.B.Y - l0.A.Y)/(l0.B.X - l0.A.Y);
-            var M1 = (l1.B.Y - l1.A.Y)/(l1.B.X - l1.A.Y);
+            var M0 = (l0.B.Y - l0.A.Y)/(l0.B.X - l0.A.X);
+            var M1 = (l1.B.Y - l1.A.Y)/(l1.B.X - l1.A.X);
 
             if (M0 == M1) { return false; }
+
+            if (Double.IsInfinity(M0))
+            {
+                pt.X = l0.A.X;
+                pt.Y = pt.X * M1 - l1.A.X * M1 - l1.A.Y;
+                return true;
+            }
+
+            if (Double.IsInfinity(M1))
+            {
+                pt.X = l1.A.X;
+                pt.Y = pt.X * M0 - l0.A.X * M0 - l0.A.Y;
+                return true;
+            }
 
             pt.X = (l1.A.Y - l0.A.Y + M0 * l0.A.X - M1 * l1.A.X) / (M0 - M1);
             pt.Y = M0 * (pt.X - l0.A.X) + l0.A.Y;
