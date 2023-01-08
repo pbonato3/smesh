@@ -34,22 +34,22 @@ Console.WriteLine("P: " + Vector3String(SMMath.TransformTo3D(to3d, SMMath.Transf
 Console.WriteLine("O: " + Vector3String(SMMath.TransformTo3D(to3d, new Vector2(0, 0))));
 
 
-//var meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
-var meshA = new Mesh();
+var meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
+//var meshA = new Mesh();
 
-meshA.VertCount = 3;
-meshA.Vertices = new Vector3[3] { new Vector3(-10, -10, 0), new Vector3(10, -10, 0), new Vector3(-10, 10, 0) };
-meshA.FaceCount = 1;
-meshA.Indices = new int[3] { 0, 1, 2 };
+//meshA.VertCount = 4;
+//meshA.Vertices = new Vector3[4] { new Vector3(-10, -10, 0), new Vector3(10, -10, 0), new Vector3(-10, 10, 0), new Vector3(10, 10, 0) };
+//meshA.FaceCount = 2;
+//meshA.Indices = new int[6] { 0, 1, 2, 1, 3, 2 };
 
 
 var meshB = new Mesh();
 
-meshB.VertCount = 3;
-//meshB.Vertices = new Vector3[3] { new Vector3(1.5, -10, -20), new Vector3(1.5, 10, 20), new Vector3(1.5, -10, 20) };
-meshB.Vertices = new Vector3[3] { new Vector3(0, -5, -10), new Vector3(0, -5, 10), new Vector3(0, 15, 0) };
-meshB.FaceCount = 1;
-meshB.Indices = new int[3] { 0, 1, 2 };
+meshB.VertCount = 4;
+meshB.Vertices = new Vector3[4] { new Vector3(1.5, -20, -20), new Vector3(1.5, 20, 20), new Vector3(1.5, -20, 20), new Vector3(1.5, 20, -20) };
+//meshB.Vertices = new Vector3[3] { new Vector3(0, -5, -10), new Vector3(0, -5, 10), new Vector3(0, 15, 0) };
+meshB.FaceCount = 2;
+meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
 var splitted = SMCSG.Split(meshA, meshB);
 SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out.obj", splitted);

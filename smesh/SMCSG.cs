@@ -14,7 +14,6 @@ namespace SMesh
         private class FaceBuilder {
             public List<Vector3> Vertices;
             public List<Vector3> Normals;
-            public List<bool> Weld;
 
             public List<int> Triangles;
 
@@ -22,6 +21,8 @@ namespace SMesh
 
             // Cuts, definded as vertices indices
             public List<int> Cuts;
+            // One cut flag for each vertex
+            public List<bool> Cutted;
 
             public AABB BBox;
             public Plane FacePlane;
@@ -34,10 +35,12 @@ namespace SMesh
             public Matrix To3D;
 
             public FaceBuilder() { 
-                Vertices = new List<Vector3>();
-                Vertices2D = new List<Vector2>();
-                Triangles = new List<int>();
-                Cuts = new List<int>();
+                Vertices    = new List<Vector3>();
+                Vertices2D  = new List<Vector2>();
+                Normals     = new List<Vector3>();
+                Triangles   = new List<int>();
+                Cuts        = new List<int>();
+                Cutted      = new List<bool>();
             }
 
             public Vector3 FaceVertex(int nT, int nV) {
@@ -230,7 +233,6 @@ namespace SMesh
             {
                 for (int j = 0; j < 3; ++j)
                 {
-                    // Closest is NaN here!!!!!!!!!!!!!!!!!!!
                     var closest = SMMath.SegmentClosestPoint(pt2d, new Segment2(builder.FaceVertex2D(i, j), builder.FaceVertex2D(i, (j + 1) % 3)));
                     if (SMMath.Vector2Distance(closest, pt2d) > tol)
                     {
@@ -249,6 +251,7 @@ namespace SMesh
                     {
                         for (int jj = 0; jj < 3; ++jj)
                         {
+                            // TODO: IS THE PROBLEM HERE??
                             if (builder.Triangles[i * 3 + j] == builder.Triangles[ii * 3 + jj] &&
                                 builder.Triangles[i * 3 + (j + 1) % 3] == builder.Triangles[ii * 3 + (jj + 1) % 3]) {
 
@@ -296,8 +299,6 @@ namespace SMesh
                         builder.Triangles.RemoveAt(i * 3);
                     }
 
-
-
                     return true;
                 }
 
@@ -337,9 +338,6 @@ namespace SMesh
 
             var ptA2d = builder.ToLocal(ptA);
             var ptB2d = builder.ToLocal(ptB);
-
-            var testA = builder.ToWorld(ptA2d);
-            var testB = builder.ToWorld(ptB2d);
 
             var seg = new Segment2(ptA2d, ptB2d);
             var edges = new HashSet<Edge>();

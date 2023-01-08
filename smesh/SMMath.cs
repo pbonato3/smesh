@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
+using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 namespace SMesh
 {
@@ -148,15 +150,15 @@ namespace SMesh
             var ydir = Vector3Normal(Vector3Cross(xdir, plane.Normal));
 
             toWorld.M00 = xdir.X;
-            toWorld.M01 = xdir.Y;
-            toWorld.M02 = xdir.Z;
+            toWorld.M10 = xdir.Y;
+            toWorld.M20 = xdir.Z;
 
-            toWorld.M10 = ydir.X;
+            toWorld.M01 = ydir.X;
             toWorld.M11 = ydir.Y;
-            toWorld.M12 = ydir.Z;
+            toWorld.M21 = ydir.Z;
 
-            toWorld.M20 = plane.Normal.X;
-            toWorld.M21 = plane.Normal.Y;
+            toWorld.M02 = plane.Normal.X;
+            toWorld.M12 = plane.Normal.Y;
             toWorld.M22 = plane.Normal.Z;
 
             toWorld.M03 = origin.X;
@@ -473,14 +475,14 @@ namespace SMesh
             if (Double.IsInfinity(M0))
             {
                 pt.X = l0.A.X;
-                pt.Y = pt.X * M1 - l1.A.X * M1 - l1.A.Y;
+                pt.Y = pt.X * M1 - l1.A.X * M1 + l1.A.Y;
                 return true;
             }
 
             if (Double.IsInfinity(M1))
             {
                 pt.X = l1.A.X;
-                pt.Y = pt.X * M0 - l0.A.X * M0 - l0.A.Y;
+                pt.Y = pt.X * M0 - l0.A.X * M0 + l0.A.Y;
                 return true;
             }
 
@@ -613,6 +615,25 @@ namespace SMesh
 
         public static Edge OrderedEdge(int a, int b) {
             return new Edge(Math.Min(a, b), Math.Max(a, b));
+        }
+
+
+        public static Vector3 GetBarycentric(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 v0 = Vector3Subtract(b, a);
+            Vector3 v1 = Vector3Subtract(c, a);
+            Vector3 v2 = Vector3Subtract(p, a);
+            double d00 = Vector3Dot(v0, v0);
+            double d01 = Vector3Dot(v0, v1);
+            double d11 = Vector3Dot(v1, v1);
+            double d20 = Vector3Dot(v2, v0);
+            double d21 = Vector3Dot(v2, v1);
+            double denom = d00 * d11 - d01 * d01;
+            Vector3 uvw;
+            uvw.Y = (d11 * d20 - d01 * d21) / denom;
+            uvw.Z = (d00 * d21 - d01 * d20) / denom;
+            uvw.X = 1.0 - uvw.Y - uvw.Z;
+            return uvw;
         }
     }
 }
