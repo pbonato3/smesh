@@ -88,6 +88,12 @@ namespace SMesh
             return Vector3Length(Vector3Subtract(b, a));
         }
 
+        public static bool AreEquals(Vector3 a, Vector3 b, double tol)
+        {
+            return Vector3Distance(a, b) <= tol;
+        }
+
+
         // Matrix Methods
 
         public static Matrix IdentityMatrix() { 
@@ -332,17 +338,17 @@ namespace SMesh
 
         // Segment Methods
 
-        private static bool EvaluateOnSegment(Segment2 s, Vector2 pt ) {
+        private static bool EvaluateOnSegment(Segment2 s, Vector2 pt, double tol) {
             var minX = Math.Min(s.A.X, s.B.X);
             var maxX = Math.Max(s.A.X, s.B.X);
 
             var minY = Math.Min(s.A.Y, s.B.Y);
             var maxY = Math.Max(s.A.Y, s.B.Y);
 
-            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY;
+            return pt.X > minX - tol && pt.X <= maxX + tol && pt.Y >= minY - tol && pt.Y <= maxY + tol;
         }
 
-        private static bool EvaluateOnSegment(Segment3 s, Vector3 pt)
+        private static bool EvaluateOnSegment(Segment3 s, Vector3 pt, double tol)
         {
             var minX = Math.Min(s.A.X, s.B.X);
             var maxX = Math.Max(s.A.X, s.B.X);
@@ -353,7 +359,7 @@ namespace SMesh
             var minZ = Math.Min(s.A.Z, s.B.Z);
             var maxZ = Math.Max(s.A.Z, s.B.Z);
 
-            return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY && pt.Z >= minZ && pt.Z <= maxZ;
+            return pt.X > minX - tol && pt.X <= maxX + tol && pt.Y >= minY - tol && pt.Y <= maxY + tol && pt.Z >= minZ - tol && pt.Z <= maxZ + tol;
         }
 
         private static double triSign(Vector2 p1, Vector2 p2, Vector2 p3)
@@ -492,20 +498,20 @@ namespace SMesh
             return true;
         }
 
-        public static bool LineSegmentIntersection(Segment2 l0, Segment2 l1, out Vector2 pt)
+        public static bool LineSegmentIntersection(Segment2 l0, Segment2 l1, out Vector2 pt, double tol)
         {
             var result = LineLineIntersection(l0, l1, out pt);
             if (!result) { return result; }
 
-            return EvaluateOnSegment(l1, pt);
+            return EvaluateOnSegment(l1, pt, tol);
         }
 
-        public static bool SegmentSegmentIntersection(Segment2 l0, Segment2 l1, out Vector2 pt)
+        public static bool SegmentSegmentIntersection(Segment2 l0, Segment2 l1, out Vector2 pt, double tol)
         {
-            var result = LineSegmentIntersection(l0, l1, out pt);
+            var result = LineSegmentIntersection(l0, l1, out pt, tol);
             if (!result) { return result; }
 
-            return EvaluateOnSegment(l0, pt);
+            return EvaluateOnSegment(l0, pt, tol);
         }
 
 
@@ -545,13 +551,13 @@ namespace SMesh
             return true;
         }
 
-        public static bool SegmentPlaneIntersection(Segment3 s, Plane p, out Vector3 pt)
+        public static bool SegmentPlaneIntersection(Segment3 s, Plane p, out Vector3 pt, double tol)
         {
             if (!LinePlaneIntersection(s, p, out pt)) {
                 return false;
             }
 
-            return (EvaluateOnSegment(s, pt));
+            return (EvaluateOnSegment(s, pt, tol));
         }
 
 

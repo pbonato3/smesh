@@ -1,4 +1,5 @@
 ﻿using SMesh;
+using System.Runtime.CompilerServices;
 
 
 
@@ -44,12 +45,26 @@ var meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj")
 
 
 var meshB = new Mesh();
-
 meshB.VertCount = 4;
 meshB.Vertices = new Vector3[4] { new Vector3(1.5, -20, -20), new Vector3(1.5, 20, 20), new Vector3(1.5, -20, 20), new Vector3(1.5, 20, -20) };
-//meshB.Vertices = new Vector3[3] { new Vector3(0, -5, -10), new Vector3(0, -5, 10), new Vector3(0, 15, 0) };
 meshB.FaceCount = 2;
 meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
+
+
+//var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
+//var move = new Vector3(1, 1, 1);
+//for (int i = 0; i < meshB.VertCount; i++) {
+//    meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], move);
+//}
+
+
+if (meshA.Normals == null || meshA.Normals.Length != meshA.Vertices.Length) {
+    SMCSG.RebuildNormals(ref meshA);
+}
+if (meshB.Normals == null || meshB.Normals.Length != meshB.Vertices.Length)
+{
+    SMCSG.RebuildNormals(ref meshB);
+}
 
 var splitted = SMCSG.Split(meshA, meshB);
 SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out.obj", splitted);
