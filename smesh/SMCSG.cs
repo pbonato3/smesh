@@ -23,7 +23,7 @@ namespace SMesh
             public List<Vector2> Vertices2D;
 
             // Cuts, definded as vertices indices
-            public List<int> Cuts;
+            public List<int> Cuts;                  // TODO: A set may improve performance when checking if cut already exists?
             // One cut flag for each vertex
             public List<bool> Cutted;
 
@@ -74,7 +74,7 @@ namespace SMesh
                 var ptB2d = Vertices2D[idxB];
                 var dir = SMMath.Vector2Subtract(ptB2d, ptA2d);
                 var rightDir = new Vector2(dir.Y, -dir.X);
-                var testPt2d = SMMath.Vector2Add(ptA2d, rightDir);
+                var testPt2d = SMMath.Vector2Add(ptA2d, SMMath.Vector2Scale(rightDir, 100));
                 var testPt3d = ToWorld(testPt2d);
                 var testDir = SMMath.Vector3Subtract(testPt3d, Vertices[idxA]);
 
@@ -116,7 +116,7 @@ namespace SMesh
 
 
 
-        public static Mesh Split(Mesh meshA, Mesh meshB, double tol = 0.00001) { 
+        public static Mesh[] Split(Mesh meshA, Mesh meshB, double tol = 0.00001) { 
             FaceBuilder[] buildersA = new FaceBuilder[meshA.FaceCount];
             FaceBuilder[] buildersB = new FaceBuilder[meshB.FaceCount];
 
@@ -191,19 +191,22 @@ namespace SMesh
 
             List<FaceBuilder> outbuild = new List<FaceBuilder>();
             for (int i = 0; i < buildersA.Length; ++i) {
-                MarkBuilderFaces(ref buildersA[i], true);
+                MarkBuilderFaces(ref buildersA[i], false);
                 outbuild.Add(buildersA[i]);
             }
             for (int i = 0; i < buildersB.Length; ++i)
             {
-                MarkBuilderFaces(ref buildersB[i], false);
+                MarkBuilderFaces(ref buildersB[i], true);
                 outbuild.Add(buildersB[i]);
             }
 
             ExpandMarks(buildersA);
-            //ExpandMarks(buildersB);
+            ExpandMarks(buildersB);
 
-            return BuildIndexedMesh(outbuild.ToArray());
+            var result = new List<Mesh>();
+            result.Add(BuildIndexedMesh(outbuild.ToArray()));
+            //result.Add(BuildIndexedMesh(buildersB.ToArray()));
+            return result.ToArray();
         }
 
 
@@ -397,7 +400,7 @@ namespace SMesh
                             }
 
                             var d = SMMath.Vector2Distance(ptA2d, builder.Vertices2D[cuts[c]]);
-                            if (newDist < d) {
+                            if (newDist <= d) {
                                 cuts.Insert(c, addedPt);
                                 break;
                             }
@@ -478,7 +481,10 @@ namespace SMesh
                         // Add cuts
                         for (int k = 0; k < cuts.Count - 1; ++k)
                         {
-                            builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
+                            if (cuts[k] != cuts[k + 1])
+                            {
+                                builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
+                            }
                         }
                     }
                 }
@@ -531,7 +537,10 @@ namespace SMesh
                     {
                         for (int k = 0; k < cuts.Count - 1; ++k)
                         {
-                            builderB.AddCut(cuts[k], cuts[k + 1], builderB.TestCut(cuts[k], cuts[k + 1], builderA.FacePlane.Normal));
+                            if (cuts[k] != cuts[k + 1])
+                            {
+                                builderB.AddCut(cuts[k], cuts[k + 1], builderB.TestCut(cuts[k], cuts[k + 1], builderA.FacePlane.Normal));
+                            }
                         }
                     }
                 }
@@ -606,8 +615,9 @@ namespace SMesh
                         skip = true;
                     }
 
+                    // TODO: this is for debug onlu
                     if (keep && skip) { 
-                        return;
+                        continue;
                     }
                 }
 
@@ -622,32 +632,26 @@ namespace SMesh
             }
         }
 
-        private static Vector3 RoundVertex(Vector3 vert, int decimals = 5) {
-            return new Vector3(
-                    Math.Round(vert.X, decimals),
-                    Math.Round(vert.Y, decimals),
-                    Math.Round(vert.Z, decimals)
-                );
-        }
-
         private static void ExpandMarks(FaceBuilder[] builders)
         {
-            HashSet<Vector3> keepVertices = new HashSet<Vector3>();
-            HashSet<Vector3> skipVertices = new HashSet<Vector3>();
+            // TODO: Try to describe connectivity of the mesh and expand marks in a more efficient way
+
+            HashSet<(Vector3, Vector3)> keepEdges = new HashSet<(Vector3, Vector3)>();
+            HashSet<(Vector3, Vector3)> skipEdges = new HashSet<(Vector3, Vector3)>();
 
             foreach (var b in builders) {
                 for (var t = 0; t < b.Triangles.Count / 3; ++t) {
                     if ( b.Marked[t] ) {
                         if (b.Keep[t])
                         {
-                            keepVertices.Add(RoundVertex(b.FaceVertex(t, 0)));
-                            keepVertices.Add(RoundVertex(b.FaceVertex(t, 1)));
-                            keepVertices.Add(RoundVertex(b.FaceVertex(t, 2)));
+                            keepEdges.Add((b.FaceVertex(t, 0), b.FaceVertex(t, 2)));
+                            keepEdges.Add((b.FaceVertex(t, 1), b.FaceVertex(t, 0)));
+                            keepEdges.Add((b.FaceVertex(t, 2), b.FaceVertex(t, 1)));
                         }
                         else {
-                            skipVertices.Add(RoundVertex(b.FaceVertex(t, 0)));
-                            skipVertices.Add(RoundVertex(b.FaceVertex(t, 1)));
-                            skipVertices.Add(RoundVertex(b.FaceVertex(t, 2)));
+                            skipEdges.Add((b.FaceVertex(t, 0), b.FaceVertex(t, 2)));
+                            skipEdges.Add((b.FaceVertex(t, 1), b.FaceVertex(t, 0)));
+                            skipEdges.Add((b.FaceVertex(t, 2), b.FaceVertex(t, 1)));
                         }
                     }
                 }
@@ -659,51 +663,60 @@ namespace SMesh
             {
                 missingMarks = false;
                 somethingChanged = false;
-                foreach (var b in builders)
+                foreach (var build in builders)
                 {
-                    for (var t = 0; t < b.Triangles.Count / 3; ++t)
+                    for (var t = 0; t < build.Triangles.Count / 3; ++t)
                     {
-                        if (b.Marked[t])
+                        if (build.Marked[t])
                         {
                             continue;
                         }
 
-                        var keepCount = 0;
-                        var skipCount = 0;
 
-                        Vector3[] rounded = new Vector3[3]{ RoundVertex(b.FaceVertex(t, 0)), RoundVertex(b.FaceVertex(t, 1)), RoundVertex(b.FaceVertex(t, 2))};
+                        Vector3[] rounded = new Vector3[3]{ build.FaceVertex(t, 0), build.FaceVertex(t, 1), build.FaceVertex(t, 2)};
 
-                        for (var n = 0; n < 3; ++n) {
-                            if (keepVertices.Contains(rounded[n])) {
-                                keepCount++;
-                            }
-                            if (skipVertices.Contains(rounded[n]))
-                            {
-                                skipCount++;
-                            }
-                        }
+                        var a = build.FaceVertex(t, 0);
+                        var b = build.FaceVertex(t, 1);
+                        var c = build.FaceVertex(t, 2);
 
-                        if (keepCount != skipCount)
+                        var countKeep = 0;
+                        var countSkip = 0;
+
+                        // TODO: this count is probably unusefull
+                        if (keepEdges.Contains((a, b))) { countKeep++; }
+                        if (keepEdges.Contains((b, c))) { countKeep++; }
+                        if (keepEdges.Contains((c, a))) { countKeep++; }
+                        if (skipEdges.Contains((a, b))) { countSkip++; }
+                        if (skipEdges.Contains((b, c))) { countSkip++; }
+                        if (skipEdges.Contains((c, a))) { countSkip++; }
+
+                        if (countKeep > countSkip)
                         {
-                            b.Marked[t] = true;
-                            b.Keep[t] = keepCount > skipCount;
+                            build.Marked[t] = true;
+                            build.Keep[t] = true;
                             somethingChanged = true;
-                            if (b.Keep[t])
-                            {
-                                keepVertices.Add(rounded[0]);
-                                keepVertices.Add(rounded[1]);
-                                keepVertices.Add(rounded[2]);
-                            }
-                            else
-                            {
-                                skipVertices.Add(rounded[0]);
-                                skipVertices.Add(rounded[1]);
-                                skipVertices.Add(rounded[2]);
-                            }
+
+                            keepEdges.Add((a, c));
+                            keepEdges.Add((b, a));
+                            keepEdges.Add((c, b));
+                            continue;
                         }
-                        else {
-                            missingMarks = true;
+                        else if (countKeep < countSkip)
+                        {
+                            build.Marked[t] = true;
+                            build.Keep[t] = false;
+                            somethingChanged = true;
+
+                            skipEdges.Add((a, c));
+                            skipEdges.Add((b, a));
+                            skipEdges.Add((c, b));
+                            continue;
                         }
+
+                        if (countKeep > 0) {
+                            Console.WriteLine("MANNAGGIA");
+                        }
+                        missingMarks = true;
                     }
                 }
             }
@@ -744,7 +757,7 @@ namespace SMesh
             var vertices = new List<Vector3>();
             var normals = new List<Vector3>();
             var indices = new List<int>();
-            var weldMap = new Dictionary<Vector3, List<int>>();
+            var weldMap = new Dictionary<Vector3, List<int>>(); // TODO: use a bvh?
 
             foreach (var builder in builders)
             {

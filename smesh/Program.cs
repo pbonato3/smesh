@@ -44,18 +44,33 @@ var meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj")
 //meshA.Indices = new int[6] { 0, 1, 2, 1, 3, 2 };
 
 
-var meshB = new Mesh();
-meshB.VertCount = 4;
-meshB.Vertices = new Vector3[4] { new Vector3(1.5, -20, -20), new Vector3(1.5, 20, 20), new Vector3(1.5, -20, 20), new Vector3(1.5, 20, -20) };
-meshB.FaceCount = 2;
-meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
+meshA = new Mesh();
+meshA.VertCount = 4;
+meshA.Vertices = new Vector3[4] { new Vector3(-2, -2, 0), new Vector3(2, 2, 0), new Vector3(-2, 2, 0), new Vector3( 2, -2, 0) };
+meshA.FaceCount = 2;
+meshA.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
+
+meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/terrain.obj");
+for (int i = 0; i < meshA.VertCount; i++)
+{
+    meshA.Vertices[i] = SMMath.Vector3Scale(meshA.Vertices[i], 100);   // TODO: automatic scale
+}
+
+//var meshB = new Mesh();
+//meshB.VertCount = 4;
+//meshB.Vertices = new Vector3[4] { new Vector3(1.5, -20, -20), new Vector3(1.5, 20, 20), new Vector3(1.5, -20, 20), new Vector3(1.5, 20, -20) };
+//meshB.FaceCount = 2;
+//meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
 
-//var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
-//var move = new Vector3(1, 1, 1);
-//for (int i = 0; i < meshB.VertCount; i++) {
-//    meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], move);
-//}
+var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/armadillo.obj");
+var move = new Vector3(0.2, 0.2, 0.2);
+for (int i = 0; i < meshB.VertCount; i++) {
+    //meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], move);
+    meshB.Vertices[i] = SMMath.Vector3Scale(meshB.Vertices[i], 100);
+}
+
+//var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cow.obj");
 
 
 if (meshA.Normals == null || meshA.Normals.Length != meshA.Vertices.Length) {
@@ -66,8 +81,10 @@ if (meshB.Normals == null || meshB.Normals.Length != meshB.Vertices.Length)
     SMCSG.RebuildNormals(ref meshB);
 }
 
-var splitted = SMCSG.Split(meshA, meshB);
-SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out.obj", splitted);
+var splitted = SMCSG.Split(meshB, meshA);
+for (int i = 0; i < splitted.Length; ++i) { 
+    SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out_" + i + ".obj", splitted[i]);
+}
 
 
 

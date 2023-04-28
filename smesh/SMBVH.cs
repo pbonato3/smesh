@@ -25,6 +25,23 @@ namespace SMesh
             return root;
         }
 
+        public static void FindNeighbours(ref List<Vector3> neighbours, BVHNode node, Vector3 test, double dist) {
+            if (!SMMath.IsInside(test, node.BBox))
+            {
+                return;
+            }
+
+            var pt = SMMath.AABBCenter(node.BBox);
+            if (node.Index >= 0 && SMMath.Vector3Distance(test, pt) < dist)
+            {
+                neighbours.Add(pt);
+                return;
+            }
+
+            FindNeighbours(ref neighbours, node.Right, test, dist);
+            FindNeighbours(ref neighbours, node.Left, test, dist);
+        }
+
         public static void CheckCollisions(ref List<int> res, BVHNode node, AABB box) {
             if (!SMMath.Collision(node.BBox, box)) {
                 return;
