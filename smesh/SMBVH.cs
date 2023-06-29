@@ -20,7 +20,7 @@ namespace SMesh
                 toAdd[i] = i;
             }
 
-            RecursiceBVH(ref root, boxes, toAdd);
+            RecursiveBVH(ref root, boxes, toAdd);
 
             return root;
         }
@@ -56,7 +56,7 @@ namespace SMesh
             CheckCollisions(ref res, node.Left, box);
         }
 
-        public static void RecursiceBVH(ref BVHNode currNode, AABB[] boxes, int[] toAdd) {
+        public static void RecursiveBVH(ref BVHNode currNode, AABB[] boxes, int[] toAdd) {
             if (toAdd.Count() == 1) {
                 // Leaf situation
                 currNode.BBox = boxes[toAdd[0]];
@@ -114,8 +114,8 @@ namespace SMesh
             currNode.Left = new BVHNode();
             currNode.Right = new BVHNode();
 
-            RecursiceBVH(ref currNode.Left, boxes, toAddLeft.ToArray());
-            RecursiceBVH(ref currNode.Right, boxes, toAddRight.ToArray());
+            RecursiveBVH(ref currNode.Left, boxes, toAddLeft.ToArray());
+            RecursiveBVH(ref currNode.Right, boxes, toAddRight.ToArray());
         }
 
         private static AABB HalveAABB(AABB bbox, bool isLeft = true) {

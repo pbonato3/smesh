@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Drawing;
+using System.Dynamic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -13,6 +14,55 @@ namespace SMesh
 {
     public class SMCSG
     {
+        public class Operation {
+            public bool invertA;
+            public bool invertB;
+            public bool returnA;
+            public bool returnB;
+            public bool merge;
+
+            public Operation(bool iA, bool iB, bool rA, bool rB, bool m) {
+                invertA = iA;
+                invertB = iB;
+                returnA = rA;
+                returnB = rB;
+                merge   = m;
+            }
+            public static Operation SplitOperation() { 
+                return new Operation(false, false, true, true, false);
+            }
+
+            public static Operation SplitAOperation()
+            {
+                return new Operation(false, false, true, false, false);
+            }
+
+            public static Operation SplitBOperation()
+            {
+                return new Operation(false, false, true, false, false);
+            }
+
+            public static Operation SubtractBfromAOperation()
+            {
+                return new Operation(false, true, true, true, true);
+            }
+
+            public static Operation SubtractAfromBOperation()
+            {
+                return new Operation(true, false, true, true, true);
+            }
+
+            public static Operation AddOperation()
+            {
+                return new Operation(false, false, true, true, true);
+            }
+
+            public static Operation IntersectOperation()
+            {
+                return new Operation(true, true, true, true, true);
+            }
+        }
+
 
         private class FaceBuilder {
             public List<Vector3> Vertices;
@@ -114,8 +164,147 @@ namespace SMesh
             }
         }
 
+        //TODO: Use this method to force one mark in separated mesh components
+        private static bool IsPointInsideMesh(Vector3 pt, BVHNode tree, FaceBuilder[] builders, double tol = 0.00001) {
+            if (!SMMath.IsInside(pt, tree.BBox)) {
+                return false;
+            }
+            var outpt = new Vector3(pt);
+            outpt.Z = tree.BBox.Min.Z - 1;
+
+            var rayAABB = new AABB();
+            rayAABB.Min.X = pt.X;
+            rayAABB.Min.Y = pt.Y;
+            rayAABB.Min.Z = Math.Min(pt.Z, outpt.Z);
+            rayAABB.Max.X = pt.X;
+            rayAABB.Max.Y = pt.Y;
+            rayAABB.Max.Z = Math.Max(pt.Z, outpt.Z);
+
+            Segment3 sg = new Segment3(outpt, pt);
+
+            List<int> collisions = new List<int>();
+            SMBVH.CheckCollisions(ref collisions, tree, rayAABB);
+
+            int intersectionCount = 0;
+            for (int i = 0; i < collisions.Count; i++)
+            {
+                Vector3 intersection;
+                var fb = builders[collisions[i]];
+                if (SMMath.SegmentPlaneIntersection(sg, fb.FacePlane, out intersection, tol)) {
+                    if (fb.Vertices2D.Count < 3) {
+                        fb.Vertices2D = new List<Vector2>();
+                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[0]));
+                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[1]));
+                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[2]));
+                    }
+                    if (SMMath.IsPointInTriangle(fb.ToLocal(intersection), fb.Vertices2D[0], fb.Vertices2D[1], fb.Vertices2D[2]))
+                    {
+                        intersectionCount++;
+                    }
+                }
+            }
+            return intersectionCount % 2 == 1;
+        }
 
 
+        // TODO: is this the right place for this 3 methods?
+        public static List<int> [] GetVerticesConnectivity(Mesh mesh) {
+            List<int>[] vConn = new List<int> [mesh.VertCount];
+
+            for (int i = 0; i < mesh.FaceCount; i++) {
+                for (int n = 0; n < 3; ++n) { 
+                    int idx = mesh.Indices[i * 3 + n];
+                    if (vConn[idx] == null) {
+                        vConn[idx] = new List<int>();
+                    }
+                    vConn[idx].Add(i);
+                }
+            }
+
+            return vConn;
+        }
+
+        // TODO: Use this method in Mark Expansion to limit the number of builders to explore
+        public static HashSet<int>[] GetFacesConnectivity(Mesh mesh) {
+
+            HashSet<int>[] fConn = new HashSet<int>[mesh.FaceCount];
+            var vConn = GetVerticesConnectivity(mesh);
+
+            for (int i = 0; i < mesh.FaceCount; i++)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    int idx = mesh.Indices[i * 3 + n];
+                    var faces = vConn[idx];
+
+                    for (int f = 0; f < faces.Count; f++) {
+                        if (faces[f] == i) {
+                            continue;
+                        }
+
+                        if (fConn[i] == null) { fConn[i] = new HashSet<int>(); }
+                        fConn[i].Add(faces[f]);
+                    }
+                }
+            }
+
+            return fConn;
+        }
+
+        public List<HashSet<int>> GetMeshComponents(Mesh mesh) { 
+            var connVerts = new List<HashSet<int>>();
+            var connFaces = new List<HashSet<int>>();
+
+            for (int i = 0; i < mesh.FaceCount; ++i)
+            {
+                int a = mesh.Indices[i * 3 + 0];
+                int b = mesh.Indices[i * 3 + 1];
+                int c = mesh.Indices[i * 3 + 2];
+
+                List<int> matches = new List<int>();
+                for (int j = 0; j < connVerts.Count; ++j)
+                {
+                    if (connVerts[j].Contains(a) || connVerts[j].Contains(b) || connVerts[j].Contains(c))
+                    {
+                        matches.Add(j);
+                        connVerts[j].Add(a);
+                        connVerts[j].Add(b);
+                        connVerts[j].Add(c);
+                        connFaces[j].Add(i);
+                    }
+                }
+
+                matches.Sort();
+
+                // A new component
+                if (matches.Count == 0)
+                {
+                    connVerts.Add(new HashSet<int>());
+                    connFaces.Add(new HashSet<int>());
+                    matches.Add(connVerts.Count - 1);
+                }
+
+                // Merge components
+                for (int n = matches.Count - 1; n > 1; n--)
+                {
+                    foreach (var v in connVerts[matches[n]])
+                    {
+                        connVerts[matches[0]].Add(v);
+                    }
+                    foreach (var v in connFaces[matches[n]])
+                    {
+                        connFaces[matches[0]].Add(v);
+                    }
+                    connVerts.RemoveAt(matches[n]);
+                    connFaces.RemoveAt(matches[n]);
+                }
+            }
+
+            return connFaces;
+        }
+
+
+        // DEPRECATED
         public static Mesh[] Split(Mesh meshA, Mesh meshB, double tol = 0.00001) { 
             FaceBuilder[] buildersA = new FaceBuilder[meshA.FaceCount];
             FaceBuilder[] buildersB = new FaceBuilder[meshB.FaceCount];
@@ -191,7 +380,7 @@ namespace SMesh
 
             List<FaceBuilder> outbuild = new List<FaceBuilder>();
             for (int i = 0; i < buildersA.Length; ++i) {
-                MarkBuilderFaces(ref buildersA[i], false);
+                MarkBuilderFaces(ref buildersA[i], true);
                 outbuild.Add(buildersA[i]);
             }
             for (int i = 0; i < buildersB.Length; ++i)
@@ -206,6 +395,179 @@ namespace SMesh
             var result = new List<Mesh>();
             result.Add(BuildIndexedMesh(outbuild.ToArray()));
             //result.Add(BuildIndexedMesh(buildersB.ToArray()));
+            return result.ToArray();
+        }
+
+        public static Mesh[] RunOperation(Mesh meshA, Mesh meshB, Operation op, double tol = 0.00001)
+        {
+            FaceBuilder[] buildersA = new FaceBuilder[meshA.FaceCount];
+            FaceBuilder[] buildersB = new FaceBuilder[meshB.FaceCount];
+
+            // init builders for mesh A
+            for (int f = 0; f < meshA.FaceCount; f++)
+            {
+                buildersA[f] = new FaceBuilder();
+
+                var a = meshA.Vertices[meshA.Indices[f * 3 + 0]];
+                var b = meshA.Vertices[meshA.Indices[f * 3 + 1]];
+                var c = meshA.Vertices[meshA.Indices[f * 3 + 2]];
+
+                buildersA[f].Vertices = new List<Vector3>(3) { a, b, c };
+                buildersA[f].Triangles = new List<int>(3) { 0, 1, 2 };
+
+                if (meshA.Normals != null && meshA.Normals.Length == meshA.Vertices.Length)
+                {
+                    var na = meshA.Normals[meshA.Indices[f * 3 + 0]];
+                    var nb = meshA.Normals[meshA.Indices[f * 3 + 1]];
+                    var nc = meshA.Normals[meshA.Indices[f * 3 + 2]];
+                    buildersA[f].Normals = new List<Vector3>(3) { na, nb, nc };
+                }
+
+
+                buildersA[f].BBox = ThreePointsAABB(a, b, c);
+            }
+
+            // init builders for mesh B
+            for (int f = 0; f < meshB.FaceCount; f++)
+            {
+                buildersB[f] = new FaceBuilder();
+
+                var a = meshB.Vertices[meshB.Indices[f * 3 + 0]];
+                var b = meshB.Vertices[meshB.Indices[f * 3 + 1]];
+                var c = meshB.Vertices[meshB.Indices[f * 3 + 2]];
+
+                buildersB[f].Vertices = new List<Vector3>(3) { a, b, c };
+                buildersB[f].Triangles = new List<int>(3) { 0, 1, 2 };
+
+                if (meshB.Normals != null && meshB.Normals.Length == meshB.Vertices.Length)
+                {
+                    var na = meshB.Normals[meshB.Indices[f * 3 + 0]];
+                    var nb = meshB.Normals[meshB.Indices[f * 3 + 1]];
+                    var nc = meshB.Normals[meshB.Indices[f * 3 + 2]];
+                    buildersB[f].Normals = new List<Vector3>(3) { na, nb, nc };
+                }
+
+                buildersB[f].BBox = ThreePointsAABB(a, b, c);
+            }
+
+            //Build bvh for mesh B
+            var bvhB = SMBVH.BuildBVH(meshB);
+
+            // Check every face of A agains B's BVH
+            for (int f = 0; f < meshA.FaceCount; f++)
+            {
+                List<int> collisions = new List<int>();
+
+                SMBVH.CheckCollisions(ref collisions, bvhB, buildersA[f].BBox);
+
+                var builderA = buildersA[f];
+                for (int c = 0; c < collisions.Count; c++)
+                {
+                    var builderB = buildersB[collisions[c]];
+
+                    // TODO: Do not recompute plane
+                    // Note: in Vertices 0, 1, 2 there will always be the original triangle
+                    builderA.FacePlane = SMMath.PlaneFrom3Points(builderA.Vertices[0], builderA.Vertices[1], builderA.Vertices[2]);
+                    builderB.FacePlane = SMMath.PlaneFrom3Points(builderB.Vertices[0], builderB.Vertices[1], builderB.Vertices[2]);
+
+                    SplitBuilders(ref builderA, ref builderB, tol);
+                }
+            }
+
+
+            for (int i = 0; i < buildersA.Length; ++i)
+            {
+                MarkBuilderFaces(ref buildersA[i], op.invertA);
+            }
+            for (int i = 0; i < buildersB.Length; ++i)
+            {
+                MarkBuilderFaces(ref buildersB[i], op.invertB);
+            }
+
+            var fConnA = GetFacesConnectivity(meshA);
+            var fConnB = GetFacesConnectivity(meshB);
+
+            if (!ExpandMarks2(buildersA, fConnA)) {
+                for (int b = 0; b < buildersA.Length; ++b) {
+                    if (buildersA[b].Marked[0]) { 
+                        continue;
+                    }
+                    var keep = !(IsPointInsideMesh(buildersA[b].Vertices[0], bvhB, buildersB, tol) || op.invertA);
+                    var tomark = new Queue<int>();
+                    tomark.Enqueue(b);
+
+                    while (tomark.Count > 0) {
+                        var index = tomark.Dequeue();
+                        if (buildersA[index].Marked[0]) { continue; }
+                        for (int t = 0; t < buildersA[index].Triangles.Count / 3; ++t)
+                        {
+                            buildersA[index].Marked[t] = true;
+                            buildersA[index].Keep[t] = keep;
+                        }
+                        foreach (var c in fConnA[b]) {
+                            tomark.Enqueue(c);
+                        }
+                    }
+
+                }
+            }
+            if (!ExpandMarks2(buildersB, fConnB))
+            {
+                var bvhA = SMBVH.BuildBVH(meshA);
+                for (int b = 0; b < buildersB.Length; ++b)
+                {
+                    if (buildersB[b].Marked[0])
+                    {
+                        continue;
+                    }
+                    var keep = !(IsPointInsideMesh(buildersB[b].Vertices[0], bvhA, buildersA, tol) || op.invertB);
+                    var tomark = new Queue<int>();
+                    tomark.Enqueue(b);
+
+                    while (tomark.Count > 0)
+                    {
+                        var index = tomark.Dequeue();
+                        if (buildersB[index].Marked[0]) { continue; }
+                        for (int t = 0; t < buildersB[index].Triangles.Count / 3; ++t)
+                        {
+                            buildersB[index].Marked[t] = true;
+                            buildersB[index].Keep[t] = keep;
+                        }
+                        foreach (var c in fConnB[b])
+                        {
+                            tomark.Enqueue(c);
+                        }
+                    }
+                }
+
+            }
+
+            var result = new List<Mesh>();
+
+            if (op.merge)
+            {
+                List<FaceBuilder> outbuild = new List<FaceBuilder>();
+                for (int i = 0; i < buildersA.Length; ++i)
+                {
+                    outbuild.Add(buildersA[i]);
+                }
+                for (int i = 0; i < buildersB.Length; ++i)
+                {
+                    outbuild.Add(buildersB[i]);
+                }
+                result.Add(BuildIndexedMesh(outbuild.ToArray()));
+            }
+            else {
+                if (op.returnA) { 
+                    result.Add(BuildIndexedMesh(buildersA.ToArray()));
+                    result.Add(BuildIndexedMesh(buildersA.ToArray(), true));
+                }
+                if (op.returnB) { 
+                    result.Add(BuildIndexedMesh(buildersB.ToArray()));
+                    result.Add(BuildIndexedMesh(buildersB.ToArray(), true));
+                }
+            }
+
             return result.ToArray();
         }
 
@@ -581,18 +943,24 @@ namespace SMesh
 
 
         private static void MarkBuilderFaces(ref FaceBuilder builder, bool invert) {
+            // TODO: maybe this initialization should be better outside this method
             builder.Marked = new bool[builder.Triangles.Count / 3];
             builder.Keep = new bool[builder.Triangles.Count / 3];
             for (int i = 0; i < builder.Marked.Count(); ++i) {
                 builder.Marked[i] = false;
-                builder.Keep[i] = false; // TODO: not necessary, only debug
+                builder.Keep[i] = false; // TODO: initialization not necessary, only debug???
             }
 
+            // If no cuts, no marks possible
             if (builder.Cuts.Count == 0)
             {
                 return;
             }
 
+            HashSet<(int, int)> keepEdges = new HashSet<(int, int)> ();
+            HashSet<(int, int)> skipEdges = new HashSet<(int, int)> ();
+
+            // Mark triangles using cuts
             for (int i = 0; i < builder.Triangles.Count / 3; ++i)
             {
                 var a = builder.Triangles[i * 3 + 0];
@@ -615,20 +983,66 @@ namespace SMesh
                         skip = true;
                     }
 
-                    // TODO: this is for debug onlu
+                    // TODO: this is for debug only
                     if (keep && skip) { 
                         continue;
                     }
                 }
 
+                if (invert) {
+                    var swap = keep;
+                    keep = skip;
+                    skip = swap;
+                }
+
                 if (keep) {
                     builder.Marked[i] = true;
-                    builder.Keep[i] = invert ? false : true;
+                    builder.Keep[i] = true;
+                    keepEdges.Add((a, c));
+                    keepEdges.Add((b, a));
+                    keepEdges.Add((c, b));
                 }
                 if (skip) {
                     builder.Marked[i] = true;
-                    builder.Keep[i] = invert ? true : false;
+                    builder.Keep[i] = false;
+                    skipEdges.Add((a, c));
+                    skipEdges.Add((b, a));
+                    skipEdges.Add((c, b));
                 }
+            }
+
+
+            // It should be always possible to expand marks inside the same builder if there is at least one marked face
+            int markedCount = keepEdges.Count + skipEdges.Count;
+            bool repeat = markedCount > 0 && markedCount < builder.Triangles.Count;
+            while (repeat) {
+                for (int i = 0; i < builder.Triangles.Count / 3; ++i) {
+                    if (builder.Marked[i]) {
+                        continue;
+                    }
+                    var a = builder.Triangles[i * 3 + 0];
+                    var b = builder.Triangles[i * 3 + 1];
+                    var c = builder.Triangles[i * 3 + 2];
+
+                    if (keepEdges.Contains((a, b)) || keepEdges.Contains((b, c)) || keepEdges.Contains((c, a)))
+                    {
+                        builder.Marked[i] = true;
+                        builder.Keep[i] = true;
+                        keepEdges.Add((a, c));
+                        keepEdges.Add((b, a));
+                        keepEdges.Add((c, b));
+                    }
+                    else if (skipEdges.Contains((a, b)) || skipEdges.Contains((b, c)) || skipEdges.Contains((c, a)))
+                    {
+                        builder.Marked[i] = true;
+                        builder.Keep[i] = false;
+                        skipEdges.Add((a, c));
+                        skipEdges.Add((b, a));
+                        skipEdges.Add((c, b));
+                    }
+                }
+                markedCount = keepEdges.Count + skipEdges.Count;
+                repeat = markedCount > 0 && markedCount < builder.Triangles.Count;
             }
         }
 
@@ -723,6 +1137,83 @@ namespace SMesh
             Console.WriteLine(missingMarks);
         }
 
+        private static bool ExpandMarks2(FaceBuilder[] builders, HashSet<int>[] fConn)
+        {
+            // We suppose that if a builder's face is marked, then all other faces are
+
+            HashSet<int> marked = new HashSet<int>();
+            HashSet<int> tomark = new HashSet<int>();
+
+            for (int i = 0; i < builders.Length; i++) {
+                if (builders[i].Marked[0]) {
+                    marked.Add(i);
+                    tomark.Remove(i);
+                    foreach (var conn in fConn[i]) {
+                        if (!marked.Contains(conn)) { 
+                            tomark.Add(conn);
+                        }
+                    }
+                }
+            }
+
+            var markCount = 0;
+            while (marked.Count > markCount) {
+                markCount = marked.Count;
+                var newFrontier = new HashSet<int>();
+
+                foreach (var index in tomark) {
+                    var builder = builders[index];
+                    var connections = fConn[index];
+                    HashSet<(Vector3, Vector3)> edges = new HashSet<(Vector3, Vector3)>();
+                    for (int t = 0; t < builder.Triangles.Count / 3; ++t)
+                    {
+                        edges.Add((builder.FaceVertex(t, 0), builder.FaceVertex(t, 1)));
+                        edges.Add((builder.FaceVertex(t, 1), builder.FaceVertex(t, 2)));
+                        edges.Add((builder.FaceVertex(t, 2), builder.FaceVertex(t, 0)));
+                    }
+
+                    foreach (var conn in connections) {
+                        if (!marked.Contains(conn)) {
+                            continue;
+                        }
+
+                        var cbuilder = builders[conn];
+                        for (int t = 0; t < cbuilder.Triangles.Count / 3; ++t) {
+                            if (edges.Contains((cbuilder.FaceVertex(t, 0), cbuilder.FaceVertex(t, 2))) ||
+                                edges.Contains((cbuilder.FaceVertex(t, 1), cbuilder.FaceVertex(t, 0))) ||
+                                edges.Contains((cbuilder.FaceVertex(t, 2), cbuilder.FaceVertex(t, 1)))) {
+                                for (int k = 0; k < builder.Triangles.Count / 3; ++k) {
+                                    builder.Marked[k] = true;
+                                    builder.Keep[k] = cbuilder.Keep[t];
+                                }
+                                break;
+                            }
+                        }
+
+                        if (builder.Marked[0])
+                        {
+                            marked.Add(index);
+                            foreach (var c in fConn[index])
+                            {
+                                if (!marked.Contains(c))
+                                {
+                                    newFrontier.Add(c);
+                                }
+                            }
+                            break;
+                        }
+                        else {
+                            newFrontier.Add(index);
+                        }
+
+                    }
+                    tomark = newFrontier;
+                }
+            }
+
+            return marked.Count == builders.Length;
+        }
+
 
         private static Mesh BuildUnindexedMesh(FaceBuilder[] builders)
         {
@@ -751,7 +1242,7 @@ namespace SMesh
         }
         
 
-        private static Mesh BuildIndexedMesh(FaceBuilder[] builders)
+        private static Mesh BuildIndexedMesh(FaceBuilder[] builders, bool negate = false)
         {
             Mesh mesh = new Mesh();
             var vertices = new List<Vector3>();
@@ -763,7 +1254,7 @@ namespace SMesh
             {
                 for (int i = 0; i < builder.Triangles.Count / 3; ++i)
                 {
-                    if (!builder.Keep[i]) {
+                    if (builder.Keep[i] != negate) {
                         continue;
                     }
                     for (int j = 0; j < 3; ++j)
