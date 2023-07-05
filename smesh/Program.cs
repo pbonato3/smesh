@@ -50,12 +50,12 @@ meshA.Vertices = new Vector3[4] { new Vector3(-2, 0, -2), new Vector3(2, 0, 2), 
 meshA.FaceCount = 2;
 meshA.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
-meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/armadillo.obj");
+meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cow.obj");
 var moveA = new Vector3(0, 0, 1);
 for (int i = 0; i < meshA.VertCount; i++)
 {
     //meshA.Vertices[i] = SMMath.Vector3Add(meshA.Vertices[i], moveA);
-    //meshA.Vertices[i] = SMMath.Vector3Scale(meshA.Vertices[i], 2000);   // TODO: automatic scale
+    //meshA.Vertices[i] = SMMath.Vector3Scale(meshA.Vertices[i], 10);   // TODO: automatic scale
 }
 
 //var meshB = new Mesh();
@@ -65,11 +65,11 @@ for (int i = 0; i < meshA.VertCount; i++)
 //meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
 
-var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cow.obj");
+var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cube.obj");
 var moveB = new Vector3(0, 0, -25);
 for (int i = 0; i < meshB.VertCount; i++) {
     //meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], moveB);
-    //meshB.Vertices[i] = SMMath.Vector3Scale(meshB.Vertices[i], 100);
+    //meshB.Vertices[i] = SMMath.Vector3Scale(meshB.Vertices[i], 10);
 }
 
 //var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cow.obj");

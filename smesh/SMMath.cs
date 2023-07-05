@@ -415,14 +415,12 @@ namespace SMesh
             return Vector3Add(seg.A, Vector3Scale(AB, t));
         }
 
-        public static Vector2 SegmentClosestPoint(Vector2 pt, Segment2 seg)
+        public static Vector2 SegmentClosestPoint(Vector2 pt, Segment2 seg, double tol = 0.000001)
         {
             var AB = Vector2Subtract(seg.B, seg.A);
             var segLen = Vector2Dot(AB, AB);
-            if (segLen * segLen < 0.0000001)
-            {
-                return seg.A;
-            }
+            if (segLen < tol){ return seg.A;}
+
             var AP = Vector2Subtract(pt, seg.A);
             double t = Vector2Dot(AP, AB) / segLen;
             if (t <= 0) { return seg.A; }
@@ -430,11 +428,14 @@ namespace SMesh
             return Vector2Add(seg.A, Vector2Scale(AB, t));
         }
 
-        public static Vector3 SegmentClosestPoint(Vector3 pt, Segment3 seg)
+        public static Vector3 SegmentClosestPoint(Vector3 pt, Segment3 seg, double tol = 0.000001)
         {
             var AB = Vector3Subtract(seg.B, seg.A);
+            var segLen = Vector3Dot(AB, AB);
+            if (segLen < tol) { return seg.A; }
+
             var AP = Vector3Subtract(pt, seg.A);
-            double t = Vector3Dot(AP, AB) / Vector3Dot(AB, AB);
+            double t = Vector3Dot(AP, AB) / segLen;
             if (t <= 0) { return seg.A; }
             if (t >= 1) { return seg.B; }
             return Vector3Add(seg.A, Vector3Scale(AB, t));

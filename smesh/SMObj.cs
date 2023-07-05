@@ -85,11 +85,11 @@ namespace SMesh
         {
             var lineCount = mesh.VertCount + mesh.FaceCount;
             if (mesh.TextureCoord != null) {
-                lineCount += mesh.VertCount;
+                lineCount += mesh.TextureCoord.Count();
             }
             if (mesh.Normals != null)
             {
-                lineCount += mesh.VertCount;
+                lineCount += mesh.Normals.Count();
             }
 
             string[] lines = new string[lineCount];

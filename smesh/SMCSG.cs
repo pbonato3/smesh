@@ -752,22 +752,30 @@ namespace SMesh
                 Vector2 intersection;
                 if (SMMath.SegmentSegmentIntersection(seg, segments[i], out intersection, tol))
                 {
-                    if (AddPointToBuilder(ref builder, builder.ToWorld(intersection), tol, out addedPt)) {
+                    if (AddPointToBuilder(ref builder, builder.ToWorld(intersection), tol, out addedPt))
+                    {
                         var newDist = SMMath.Vector2Distance(ptA2d, builder.Vertices2D[addedPt]);
 
-                        for (int c = 0; c <= cuts.Count; ++c) {
-                            if (c == cuts.Count) {
+                        for (int c = 0; c <= cuts.Count; ++c)
+                        {
+                            if (c == cuts.Count)
+                            {
                                 cuts.Add(addedPt);
                                 break;
                             }
 
                             var d = SMMath.Vector2Distance(ptA2d, builder.Vertices2D[cuts[c]]);
-                            if (newDist <= d) {
+                            if (newDist <= d)
+                            {
                                 cuts.Insert(c, addedPt);
                                 break;
                             }
                         }
                         cut = true;
+                    }
+                    else {
+                        Console.WriteLine("ERROR HERE!");
+                        //TODO: solve numeric issues
                     }
                 }
             }
@@ -845,7 +853,7 @@ namespace SMesh
                         {
                             if (cuts[k] != cuts[k + 1])
                             {
-                                builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
+                                builderA.AddCut(cuts[k], cuts[k + 1], !builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
                             }
                         }
                     }
@@ -1317,7 +1325,7 @@ namespace SMesh
 
                 var vab = SMMath.Vector3Subtract(vb, va);
                 var vac = SMMath.Vector3Subtract(vc, va);
-                var norm = SMMath.Vector3Normal(SMMath.Vector3Cross(vab, vac));
+                var norm = SMMath.Vector3Normal(SMMath.Vector3Cross(vac, vab));
 
                 mesh.Normals[a] = SMMath.Vector3Add(mesh.Normals[a], norm);
                 mesh.Normals[b] = SMMath.Vector3Add(mesh.Normals[b], norm);
