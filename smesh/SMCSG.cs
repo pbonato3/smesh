@@ -853,7 +853,7 @@ namespace SMesh
                         {
                             if (cuts[k] != cuts[k + 1])
                             {
-                                builderA.AddCut(cuts[k], cuts[k + 1], !builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
+                                builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
                             }
                         }
                     }

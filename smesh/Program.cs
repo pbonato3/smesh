@@ -50,7 +50,7 @@ meshA.Vertices = new Vector3[4] { new Vector3(-2, 0, -2), new Vector3(2, 0, 2), 
 meshA.FaceCount = 2;
 meshA.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
-meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cow.obj");
+meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cube.obj");
 var moveA = new Vector3(0, 0, 1);
 for (int i = 0; i < meshA.VertCount; i++)
 {
@@ -66,9 +66,9 @@ for (int i = 0; i < meshA.VertCount; i++)
 
 
 var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/cube.obj");
-var moveB = new Vector3(0, 0, -25);
+var moveB = new Vector3(0.5, 0.5, 0.5);
 for (int i = 0; i < meshB.VertCount; i++) {
-    //meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], moveB);
+    meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], moveB);
     //meshB.Vertices[i] = SMMath.Vector3Scale(meshB.Vertices[i], 10);
 }
 
@@ -83,7 +83,7 @@ if (meshB.Normals == null || meshB.Normals.Length != meshB.Vertices.Length)
     SMCSG.RebuildNormals(ref meshB);
 }
 
-var result = SMCSG.RunOperation(meshA, meshB, SMCSG.Operation.SplitOperation());
+var result = SMCSG.RunOperation(meshA, meshB, SMCSG.Operation.SubtractAfromBOperation());
 for (int i = 0; i < result.Length; ++i) { 
     SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out_" + i + ".obj", result[i]);
 }
