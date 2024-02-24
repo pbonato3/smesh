@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography.X509Certificates;
-
-namespace SMesh
+﻿namespace SMesh
 {
 
     public struct Vector2

@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.3.32922.545
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "smesh", "smesh\smesh.csproj", "{E9AC1180-1248-4094-9B50-D166093E8408}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "smesh", "smesh\smesh.csproj", "{E9AC1180-1248-4094-9B50-D166093E8408}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "smesh-tests", "smesh-tests\smesh-tests.csproj", "{C029E41F-BE17-4C20-8E4F-BC15ABF39B8D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{E9AC1180-1248-4094-9B50-D166093E8408}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E9AC1180-1248-4094-9B50-D166093E8408}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E9AC1180-1248-4094-9B50-D166093E8408}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C029E41F-BE17-4C20-8E4F-BC15ABF39B8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C029E41F-BE17-4C20-8E4F-BC15ABF39B8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C029E41F-BE17-4C20-8E4F-BC15ABF39B8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C029E41F-BE17-4C20-8E4F-BC15ABF39B8D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,39 +1,10 @@
 ﻿using SMesh;
-using System.Runtime.CompilerServices;
 
 
+var mesh = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
 
-// TEST TRANSFORM
-//Vector3 a = new Vector3(2, 6, 0);
-//Vector3 b = new Vector3(3, 6, 2);
-//Vector3 c = new Vector3(7, 6,-2);
-
-//Vector3 p = new Vector3(3, 5, 0);
-
-Vector3 a = new Vector3(2, 2, 2);
-Vector3 b = new Vector3(3, 6, 2);
-Vector3 c = new Vector3(7, 6, 2);
-
-Vector3 p = new Vector3(3, 5, 2);
-
-Plane plane = SMMath.PlaneFrom3Points(a, b, c);
-Matrix to3d = new Matrix();
-Matrix to2d = new Matrix();
-SMMath.PlaneTransformations(plane, a, b, out to3d, out to2d);
-
-
-Console.WriteLine("A: " + Vector2String(SMMath.TransformTo2D(to2d, a)));
-Console.WriteLine("B: " + Vector2String(SMMath.TransformTo2D(to2d, b)));
-Console.WriteLine("C: " + Vector2String(SMMath.TransformTo2D(to2d, c)));
-Console.WriteLine("P: " + Vector2String(SMMath.TransformTo2D(to2d, p)));
-
-Console.WriteLine("A: " + Vector3String(SMMath.TransformTo3D(to3d, SMMath.TransformTo2D(to2d, a))));
-Console.WriteLine("B: " + Vector3String(SMMath.TransformTo3D(to3d, SMMath.TransformTo2D(to2d, b))));
-Console.WriteLine("C: " + Vector3String(SMMath.TransformTo3D(to3d, SMMath.TransformTo2D(to2d, c))));
-Console.WriteLine("P: " + Vector3String(SMMath.TransformTo3D(to3d, SMMath.TransformTo2D(to2d, p))));
-
-Console.WriteLine("O: " + Vector3String(SMMath.TransformTo3D(to3d, new Vector2(0, 0))));
-
+//var root = SphereBVH.BuildBVH(mesh);
+//RecursiveBVHToString(root.Root, 0);
 
 var meshA = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/sample.obj");
 //var meshA = new Mesh();
@@ -90,28 +61,11 @@ for (int i = 0; i < result.Length; ++i) {
 
 
 
-//SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out.obj", mesh);
-
-//var root = SMBVH.BuildBVH(mesh);
-//RecursiveBVHToString(root, 0);
+SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out.obj", mesh);
 
 
-/* TEST TRANSFORM
-Vector3 a = new Vector3(2, 6, 0);
-Vector3 b = new Vector3(3, 6, 2);
-Vector3 c = new Vector3(7, 6,-2);
 
-Vector3 p = new Vector3(3, 5, 0);
 
-Plane plane = SMMath.PlaneFrom3Points(a, b, c);
-Matrix to3d = new Matrix();
-Matrix to2d = new Matrix();
-SMMath.PlaneTransformations(plane, a, b, out to3d, out to2d);
-
-Console.WriteLine("B: " + Vector3String(SMMath.Vector3Transform(to2d, b)));
-Console.WriteLine("C: " + Vector3String(SMMath.Vector3Transform(to2d, c)));
-Console.WriteLine("P: " + Vector3String(SMMath.Vector3Transform(to2d, p)));
-*/
 
 
 static string Vector2String(Vector2 vec)
@@ -135,25 +89,26 @@ static string Vector3String(Vector3 vec) {
     return str;
 }
 
-static void RecursiveBVHToString(BVHNode currNode, int level)
+static void RecursiveBVHToString(SphereBVH.SphereNode currNode, int level)
 {
 
     string spaces = "";
     for (int i = 0; i < level; i++)
     {
-        spaces += "  ";
+        spaces += " _ ";
     }
 
-    if (currNode.Index >= 0)
+    if (currNode.Id >= 0)
     {
-        System.Console.WriteLine(spaces + currNode.Index + "\n");
+        System.Console.WriteLine(spaces + currNode.Id + "\n");
         return;
     }
 
     System.Console.WriteLine(spaces + "{\n");
 
-    RecursiveBVHToString(currNode.Left, level + 1);
-    RecursiveBVHToString(currNode.Right, level + 1);
+    for (int i = 0; i < currNode.Children.Count; i++) {
+        RecursiveBVHToString(currNode.Children[i], level + 1);
+    }
 
     System.Console.WriteLine(spaces + "}\n");
 

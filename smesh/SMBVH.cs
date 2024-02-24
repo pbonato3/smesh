@@ -1,12 +1,209 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Schema;
+﻿using System.Reflection.Metadata.Ecma335;
 
 namespace SMesh
 {
+
+    public class SphereBVH {
+        public class Sphere {
+            public Vector3 Point;
+            public double Radius;
+
+            public Sphere() { 
+                Point = new Vector3();
+                Radius = 0;
+            }
+
+            public Sphere(Vector3 point, double radius) { 
+                Point = point;
+                Radius = radius;
+            }
+
+            public bool Intersects(Sphere sphere) {
+                return SMMath.Vector3Distance(Point, sphere.Point) < Radius + sphere.Radius;
+            }
+
+            public void Union(Sphere sphere) {
+                var dist = SMMath.Vector3Distance(Point, sphere.Point);
+                if (Radius >= dist + sphere.Radius) {
+                    return;
+                }
+                if (sphere.Radius >= dist + Radius) {
+                    Point = sphere.Point;
+                    Radius = sphere.Radius;
+                    return;
+                }
+
+                var dir = SMMath.Vector3Normal(SMMath.Vector3Subtract(sphere.Point, Point));
+                var r = (dist + Radius + sphere.Radius) * 0.5;
+                var m = r - Radius;
+
+                var movement = SMMath.Vector3Scale(dir, m);
+
+                Point = SMMath.Vector3Add(Point, movement);
+                Radius = r;
+            }
+        }
+
+        public class SphereNode {
+            public int Id;
+            public Sphere Sphere;
+            public List<SphereNode> Children;
+
+            public SphereNode()
+            {
+                Id = -1;
+                Sphere = new Sphere();
+                Children = new List<SphereNode>();
+            }
+
+            public SphereNode(Sphere sphere, int id = -1) {
+                Id = id;
+                Sphere = sphere;
+                Children = new List<SphereNode>();
+            }
+
+            public void SetVolume(List<SphereNode> spheres) {
+                //TODO: find a better algorithm for this
+                if (spheres.Count < 1) {
+                    return;
+                }
+
+                Sphere.Point = spheres[0].Sphere.Point;
+                Sphere.Radius = spheres[0].Sphere.Radius;
+                for (int i = 1; i < spheres.Count; i++) {
+                    Sphere.Union(spheres[i].Sphere);
+                }
+            }
+        }
+
+        public enum Sorting { 
+            NO_SORT,
+            X_SORT,
+            Y_SORT,
+            Z_SORT
+        }
+        public SphereNode Root;
+
+        public SphereBVH() {
+            Root = new SphereNode();
+        }
+
+        public void BuildBVH(List<SphereNode> nodes, int maxLeafCount = 8, int breadth = 8, Sorting sorting = Sorting.X_SORT) {
+            Root = BuildBVHRecursion(nodes, maxLeafCount, breadth, sorting);
+        }
+
+        private SphereNode BuildBVHRecursion(List<SphereNode> nodes, int max, int breadth, Sorting sorting) {
+            if (nodes.Count == 1) {
+                return nodes[0];
+            }
+
+            var node = new SphereNode();
+            node.SetVolume(nodes);
+
+            if (nodes.Count <= max) {
+                for (int i = 0; i < nodes.Count; ++i) {
+                    node.Children.Add(nodes[i]);
+                }
+                return node;
+            }
+
+            var nextSort = sorting;
+            switch (sorting)
+            {
+                case Sorting.X_SORT:
+                    nodes.Sort((a, b) => { return a.Sphere.Point.X.CompareTo(b.Sphere.Point.X); });
+                    nextSort = Sorting.Y_SORT;
+                    break;
+                case Sorting.Y_SORT:
+                    nodes.Sort((a, b) => { return a.Sphere.Point.Y.CompareTo(b.Sphere.Point.Y); });
+                    nextSort = Sorting.Z_SORT;
+                    break;
+                case Sorting.Z_SORT:
+                    nodes.Sort((a, b) => { return a.Sphere.Point.Z.CompareTo(b.Sphere.Point.Z); });
+                    nextSort = Sorting.X_SORT;
+                    break;
+                default:
+                    break;
+            }
+
+            int nnodes = nodes.Count / breadth;
+            int remain = nodes.Count % breadth;
+
+            int c = 0;
+            for (int i = 0; i < breadth; ++i) {
+                var maxIndex = c + nnodes + (remain > 0 ? 1 : 0);
+                remain--;
+                var toAdd = new List<SphereNode>();
+                for (; c < maxIndex; c++) {
+                    toAdd.Add(nodes[c]);
+                }
+                if (toAdd.Count > 0) { 
+                    node.Children.Add(BuildBVHRecursion(toAdd, max, breadth, nextSort));
+                }
+            }
+
+            return node;
+        }
+
+        public void BuildBVH(List<Vector3> points, double range){
+            var spheres = new List<SphereNode>();
+            for (int i = 0; i < points.Count; ++i) {
+                spheres.Add(new SphereNode(new Sphere(points[i], range), i));
+            }
+            BuildBVH(spheres);
+        }
+
+        public static SphereBVH BuildBVH(Mesh mesh)
+        {
+            var bvh = new SphereBVH();
+            var spheres = new List<SphereNode>();
+            for (int i = 0; i < mesh.FaceCount; ++i) {
+                var a = mesh.Vertices[mesh.Indices[i * 3 + 0]];
+                var b = mesh.Vertices[mesh.Indices[i * 3 + 1]];
+                var c = mesh.Vertices[mesh.Indices[i * 3 + 2]];
+
+                spheres.Add(new SphereNode(FaceSphere(a, b, c), i));
+            }
+            bvh.BuildBVH(spheres);
+            return bvh;
+        }
+
+        public static Sphere FaceSphere(Vector3 a, Vector3 b, Vector3 c) {
+            var d = SMMath.Vector3Divide(SMMath.Vector3Add(SMMath.Vector3Add(a, b), c), 3);
+            var r = Math.Max(Math.Max(SMMath.Vector3Distance(a, d), SMMath.Vector3Distance(b, d)), SMMath.Vector3Distance(c, d));
+            return new Sphere(d, r);
+        }
+
+        public List<int> Search(Sphere sphere)
+        {
+            return Search(sphere.Point, sphere.Radius);
+        }
+
+        public List<int> Search(Vector3 point, double range) {
+            var results = new List<int>();
+            SearchRecursion(Root, ref results, new Sphere(point, range));
+            return results;
+        }
+
+        private void SearchRecursion(SphereNode node, ref List<int> results, Sphere search) {
+            if (!search.Intersects(node.Sphere)) {
+                return;
+            }
+
+            if (node.Children.Count > 0)
+            {
+                for (int i = 0; i < node.Children.Count; ++i) { 
+                    SearchRecursion(node.Children[i], ref results, search);
+                }
+            }
+            else {
+                results.Add(node.Id);
+            }
+        }
+
+        // TODO: Ray intersection
+    }
+
     public static class SMBVH
     {
         public static BVHNode BuildBVH(Mesh mesh)

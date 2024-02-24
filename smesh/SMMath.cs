@@ -1,10 +1,4 @@
-﻿using System.ComponentModel;
-using System.Drawing;
-using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics;
-
-namespace SMesh
+﻿namespace SMesh
 {
     public static class SMMath
     {
@@ -61,6 +55,11 @@ namespace SMesh
         public static Vector3 Vector3Scale(Vector3 v, double s)
         {
             return new Vector3(v.X * s, v.Y * s, v.Z * s);
+        }
+
+        public static Vector3 Vector3Divide(Vector3 v, double s)
+        {
+            return new Vector3(v.X / s, v.Y / s, v.Z / s);
         }
 
         public static double Vector3Length(Vector3 v)

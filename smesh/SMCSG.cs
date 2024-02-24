@@ -1,16 +1,4 @@
-﻿using SMesh;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.Drawing;
-using System.Dynamic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SMesh
+﻿namespace SMesh
 {
     public class SMCSG
     {
