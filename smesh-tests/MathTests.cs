@@ -31,5 +31,27 @@ namespace smesh_tests
             Assert.IsTrue(SMMath.Vector3Distance(SMMath.TransformTo3D(to3d, SMMath.TransformTo2D(to2d, p)), p) < EPSILON);
             Assert.IsTrue(SMMath.Vector3Distance(SMMath.TransformTo3D(to3d, new Vector2(0, 0)), a) < EPSILON);
         }
+
+
+        [TestMethod]
+        public void Lines3dIntersection()
+        {
+            var sga = new Segment3(new Vector3(-11, 0, -1), new Vector3(-9, 0, -1));
+            var sgb = new Segment3(new Vector3(-10, -1, 1), new Vector3(-10, 1, 1));
+
+            Vector3 pta;
+            Vector3 ptb;
+            Assert.IsTrue(SMMath.LineLineClosestPoint(sga, sgb, out pta, out ptb, EPSILON));
+            Assert.IsTrue(SMMath.Vector3Distance(pta, new Vector3(-10, 0, -1)) == 0);
+            Assert.IsTrue(SMMath.Vector3Distance(ptb, new Vector3(-10, 0, 1)) == 0);
+
+            sga.A = new Vector3(2, 6, -9);
+            sga.B = SMMath.Vector3Add(sga.A, new Vector3(3, 4, -4));
+            sgb.A = new Vector3(-1, -2, 3);
+            sgb.B = SMMath.Vector3Add(sgb.A, new Vector3(2, -6, 1));
+
+            Assert.IsTrue(SMMath.LineLineClosestPoint(sga, sgb, out pta, out ptb, EPSILON));
+            Assert.IsTrue(SMMath.Vector3Distance(pta, ptb) - 4.740201166731855 < EPSILON);
+        }
     }
 }

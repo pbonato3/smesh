@@ -514,6 +514,27 @@
             return EvaluateOnSegment(l0, pt, tol);
         }
 
+        public static bool LineLineClosestPoint(Segment3 la, Segment3 lb, out Vector3 pa, out Vector3 pb, double tol) {
+            pa = new Vector3();
+            pb = new Vector3();
+
+            var va = Vector3Normal(Vector3Subtract(la.B, la.A));
+            var vb = Vector3Normal(Vector3Subtract(lb.B, lb.A));
+
+            if (Vector3Distance(va, vb) < tol) { 
+                // Parallel
+                return false; 
+            }
+            var cross = Vector3Cross(va, vb);
+            //var d = Math.Abs(Vector3Dot(cross, Vector3Subtract(la.A, lb.A)))/Vector3Length(cross);
+            var crossLen = Vector3Dot(cross, cross);
+            var ta = Vector3Dot(Vector3Cross(vb, cross), Vector3Subtract(lb.A, la.A)) / crossLen;
+            var tb = Vector3Dot(Vector3Cross(va, cross), Vector3Subtract(lb.A, la.A)) / crossLen;
+
+            pa = Vector3Add(la.A, Vector3Scale(va, ta));
+            pb = Vector3Add(lb.A, Vector3Scale(vb, tb));
+            return true;
+        }
 
 
         // Plane Methods
