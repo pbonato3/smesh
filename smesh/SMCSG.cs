@@ -27,7 +27,7 @@
 
             public static Operation SplitBOperation()
             {
-                return new Operation(false, false, true, false, false);
+                return new Operation(false, false, false, true, false);
             }
 
             public static Operation SubtractBfromAOperation()
@@ -66,6 +66,7 @@
             public List<bool> Cutted;
 
             public AABB BBox;
+            public Sphere Sphere;
             public Plane FacePlane;
 
             public bool[] Marked;
@@ -153,25 +154,16 @@
         }
 
         //TODO: Use this method to force one mark in separated mesh components
-        private static bool IsPointInsideMesh(Vector3 pt, BVHNode tree, FaceBuilder[] builders, double tol = 0.00001) {
-            if (!SMMath.IsInside(pt, tree.BBox)) {
+        private static bool IsPointInsideMesh(Vector3 pt, SphereBVH.SphereNode tree, FaceBuilder[] builders, double tol = 0.00001) {
+            if (SMMath.Vector3Distance(pt, tree.Sphere.Point) > tree.Sphere.Radius) {
                 return false;
             }
-            var outpt = new Vector3(pt);
-            outpt.Z = tree.BBox.Min.Z - 1;
+            var rayOrigin = new Vector3(pt);
+            rayOrigin.Z = rayOrigin.Z - tree.Sphere.Radius - 1;
+            var rayDirection = SMMath.Vector3Subtract(pt, rayOrigin);
+            Segment3 sg = new Segment3(rayOrigin, pt);
 
-            var rayAABB = new AABB();
-            rayAABB.Min.X = pt.X;
-            rayAABB.Min.Y = pt.Y;
-            rayAABB.Min.Z = Math.Min(pt.Z, outpt.Z);
-            rayAABB.Max.X = pt.X;
-            rayAABB.Max.Y = pt.Y;
-            rayAABB.Max.Z = Math.Max(pt.Z, outpt.Z);
-
-            Segment3 sg = new Segment3(outpt, pt);
-
-            List<int> collisions = new List<int>();
-            SMBVH.CheckCollisions(ref collisions, tree, rayAABB);
+            List<int> collisions = tree.Search(rayOrigin, rayDirection);
 
             int intersectionCount = 0;
             for (int i = 0; i < collisions.Count; i++)
@@ -318,7 +310,7 @@
                 }
 
 
-                buildersA[f].BBox = ThreePointsAABB(a, b, c);
+                buildersA[f].Sphere = ThreePointsSphere(a, b, c);
             }
 
             // init builders for mesh B
@@ -340,18 +332,16 @@
                     buildersB[f].Normals = new List<Vector3>(3) { na, nb, nc };
                 }
 
-                buildersB[f].BBox = ThreePointsAABB(a, b, c);
+                buildersB[f].Sphere = ThreePointsSphere(a, b, c);
             }
 
             //Build bvh for mesh B
-            var bvhB = SMBVH.BuildBVH(meshB);
+            var bvhB = SphereBVH.BuildBVH(meshB);
 
             // Check every face of A agains B's BVH
             for (int f = 0; f < meshA.FaceCount; f++)
             {
-                List<int> collisions = new List<int>();
-
-                SMBVH.CheckCollisions(ref collisions, bvhB, buildersA[f].BBox);
+                List<int> collisions = bvhB.Search(buildersA[f].Sphere);
 
                 var builderA = buildersA[f];
                 for (int c = 0; c < collisions.Count; c++) {
@@ -412,7 +402,7 @@
                 }
 
 
-                buildersA[f].BBox = ThreePointsAABB(a, b, c);
+                buildersA[f].Sphere = ThreePointsSphere(a, b, c);
             }
 
             // init builders for mesh B
@@ -435,18 +425,16 @@
                     buildersB[f].Normals = new List<Vector3>(3) { na, nb, nc };
                 }
 
-                buildersB[f].BBox = ThreePointsAABB(a, b, c);
+                buildersB[f].Sphere = ThreePointsSphere(a, b, c);
             }
 
             //Build bvh for mesh B
-            var bvhB = SMBVH.BuildBVH(meshB);
+            var bvhB = SphereBVH.BuildBVH(meshB);
 
             // Check every face of A agains B's BVH
             for (int f = 0; f < meshA.FaceCount; f++)
             {
-                List<int> collisions = new List<int>();
-
-                SMBVH.CheckCollisions(ref collisions, bvhB, buildersA[f].BBox);
+                List<int> collisions = bvhB.Search(buildersA[f].Sphere);
 
                 var builderA = buildersA[f];
                 for (int c = 0; c < collisions.Count; c++)
@@ -480,7 +468,7 @@
                     if (buildersA[b].Marked[0]) { 
                         continue;
                     }
-                    var keep = !(IsPointInsideMesh(buildersA[b].Vertices[0], bvhB, buildersB, tol) || op.invertA);
+                    var keep = !(IsPointInsideMesh(buildersA[b].Vertices[0], bvhB.Root, buildersB, tol) || op.invertA);
                     var tomark = new Queue<int>();
                     tomark.Enqueue(b);
 
@@ -501,14 +489,14 @@
             }
             if (!ExpandMarks2(buildersB, fConnB))
             {
-                var bvhA = SMBVH.BuildBVH(meshA);
+                var bvhA = SphereBVH.BuildBVH(meshA);
                 for (int b = 0; b < buildersB.Length; ++b)
                 {
                     if (buildersB[b].Marked[0])
                     {
                         continue;
                     }
-                    var keep = !(IsPointInsideMesh(buildersB[b].Vertices[0], bvhA, buildersA, tol) || op.invertB);
+                    var keep = !(IsPointInsideMesh(buildersB[b].Vertices[0], bvhA.Root, buildersA, tol) || op.invertB);
                     var tomark = new Queue<int>();
                     tomark.Enqueue(b);
 
@@ -588,6 +576,14 @@
             bbox.Max.Z = Math.Max(a.Z, Math.Max(b.Z, c.Z));
 
             return bbox;
+        }
+
+        private static Sphere ThreePointsSphere(Vector3 a, Vector3 b, Vector3 c)
+        {
+            var sphere = new Sphere();
+            sphere.Point = SMMath.Vector3Divide(SMMath.Vector3Add(SMMath.Vector3Add(a, b), c), 3);
+            sphere.Radius = Math.Max(Math.Max(SMMath.Vector3Distance(a, sphere.Point), SMMath.Vector3Distance(b, sphere.Point)), SMMath.Vector3Distance(c, sphere.Point));
+            return sphere;
         }
 
 

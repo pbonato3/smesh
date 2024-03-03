@@ -4,46 +4,6 @@ namespace SMesh
 {
 
     public class SphereBVH {
-        public class Sphere {
-            public Vector3 Point;
-            public double Radius;
-
-            public Sphere() { 
-                Point = new Vector3();
-                Radius = 0;
-            }
-
-            public Sphere(Vector3 point, double radius) { 
-                Point = point;
-                Radius = radius;
-            }
-
-            public bool Intersects(Sphere sphere) {
-                return SMMath.Vector3Distance(Point, sphere.Point) < Radius + sphere.Radius;
-            }
-
-            public void Union(Sphere sphere) {
-                var dist = SMMath.Vector3Distance(Point, sphere.Point);
-                if (Radius >= dist + sphere.Radius) {
-                    return;
-                }
-                if (sphere.Radius >= dist + Radius) {
-                    Point = sphere.Point;
-                    Radius = sphere.Radius;
-                    return;
-                }
-
-                var dir = SMMath.Vector3Normal(SMMath.Vector3Subtract(sphere.Point, Point));
-                var r = (dist + Radius + sphere.Radius) * 0.5;
-                var m = r - Radius;
-
-                var movement = SMMath.Vector3Scale(dir, m);
-
-                Point = SMMath.Vector3Add(Point, movement);
-                Radius = r;
-            }
-        }
-
         public class SphereNode {
             public int Id;
             public Sphere Sphere;
@@ -72,6 +32,60 @@ namespace SMesh
                 Sphere.Radius = spheres[0].Sphere.Radius;
                 for (int i = 1; i < spheres.Count; i++) {
                     Sphere.Union(spheres[i].Sphere);
+                }
+            }
+
+            public List<int> Search(Vector3 point, double range)
+            {
+                var results = new List<int>();
+                SearchRecursion(this, ref results, new Sphere(point, range));
+                return results;
+            }
+
+            private void SearchRecursion(SphereNode node, ref List<int> results, Sphere search)
+            {
+                if (!search.Intersects(node.Sphere))
+                {
+                    return;
+                }
+
+                if (node.Children.Count > 0)
+                {
+                    for (int i = 0; i < node.Children.Count; ++i)
+                    {
+                        SearchRecursion(node.Children[i], ref results, search);
+                    }
+                }
+                else
+                {
+                    results.Add(node.Id);
+                }
+            }
+
+            public List<int> Search(Vector3 rayOrigin, Vector3 rayDirection)
+            {
+                var results = new List<int>();
+                SearchRecursion(this, ref results, rayOrigin, rayDirection);
+                return results;
+            }
+
+            private void SearchRecursion(SphereNode node, ref List<int> results, Vector3 rayOrigin, Vector3 rayDirection)
+            {
+                if (!node.Sphere.Intersects(rayOrigin, rayDirection))
+                {
+                    return;
+                }
+
+                if (node.Children.Count > 0)
+                {
+                    for (int i = 0; i < node.Children.Count; ++i)
+                    {
+                        SearchRecursion(node.Children[i], ref results, rayOrigin, rayDirection);
+                    }
+                }
+                else
+                {
+                    results.Add(node.Id);
                 }
             }
         }
@@ -180,25 +194,7 @@ namespace SMesh
         }
 
         public List<int> Search(Vector3 point, double range) {
-            var results = new List<int>();
-            SearchRecursion(Root, ref results, new Sphere(point, range));
-            return results;
-        }
-
-        private void SearchRecursion(SphereNode node, ref List<int> results, Sphere search) {
-            if (!search.Intersects(node.Sphere)) {
-                return;
-            }
-
-            if (node.Children.Count > 0)
-            {
-                for (int i = 0; i < node.Children.Count; ++i) { 
-                    SearchRecursion(node.Children[i], ref results, search);
-                }
-            }
-            else {
-                results.Add(node.Id);
-            }
+            return Root.Search(point, range);
         }
 
         // TODO: Ray intersection

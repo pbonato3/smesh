@@ -120,6 +120,61 @@
         }
     };
 
+    public class Sphere
+    {
+        public Vector3 Point;
+        public double Radius;
+
+        public Sphere()
+        {
+            Point = new Vector3();
+            Radius = 0;
+        }
+
+        public Sphere(Vector3 point, double radius)
+        {
+            Point = point;
+            Radius = radius;
+        }
+
+        public bool Intersects(Sphere sphere)
+        {
+            return SMMath.Vector3Distance(Point, sphere.Point) < Radius + sphere.Radius;
+        }
+
+        public bool Intersects(Vector3 rayOrigin, Vector3 rayDirection)
+        {
+            var OP = SMMath.Vector3Subtract(Point, rayOrigin);
+            var d = SMMath.Vector3Dot(OP, rayDirection);
+            var rp = SMMath.Vector3Add(SMMath.Vector3Scale(SMMath.Vector3Normal(rayDirection), d), rayOrigin);
+            return SMMath.Vector3Distance(Point, rp) <= Radius;
+        }
+
+        public void Union(Sphere sphere)
+        {
+            var dist = SMMath.Vector3Distance(Point, sphere.Point);
+            if (Radius >= dist + sphere.Radius)
+            {
+                return;
+            }
+            if (sphere.Radius >= dist + Radius)
+            {
+                Point = sphere.Point;
+                Radius = sphere.Radius;
+                return;
+            }
+
+            var dir = SMMath.Vector3Normal(SMMath.Vector3Subtract(sphere.Point, Point));
+            var r = (dist + Radius + sphere.Radius) * 0.5;
+            var m = r - Radius;
+
+            var movement = SMMath.Vector3Scale(dir, m);
+
+            Point = SMMath.Vector3Add(Point, movement);
+            Radius = r;
+        }
+    }
+
     public struct Mesh
     {
         public int VertCount;
