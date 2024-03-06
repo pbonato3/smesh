@@ -92,6 +92,9 @@
             return Vector3Distance(a, b) <= tol;
         }
 
+        public static double Vector3Angle(Vector3 va, Vector3 vb) {
+            return Math.Acos(Vector3Dot(va, vb) / (Vector3Length(va) * Vector3Length(vb)));
+        }
 
         // Matrix Methods
 
@@ -381,6 +384,15 @@
             return !(has_neg && has_pos);
         }
 
+        public static bool IsPointInTriangle(Vector3 pt, Vector3 v1, Vector3 v2, Vector3 v3, double tol)
+        {
+            double a1 = Vector3Angle(Vector3Subtract(pt, v1), Vector3Subtract(pt,v2));
+            double a2 = Vector3Angle(Vector3Subtract(pt, v2), Vector3Subtract(pt,v3));
+            double a3 = Vector3Angle(Vector3Subtract(pt, v3), Vector3Subtract(pt,v1));
+
+            return Math.Abs(2*Math.PI - (a1 + a2 + a3)) < tol;
+        }
+
         public static bool GetPointOnSegment(Vector2 pt, Vector2 va, Vector2 vb, double tol, out Vector2 res) {
             if (AreEquals(pt, va, tol)) {
                 res = va;
@@ -536,6 +548,25 @@
             return true;
         }
 
+        public static bool LineLineIntersection(Segment3 la, Segment3 lb, out Vector3 pt, double tol)
+        {
+            Vector3 test;
+            return LineLineClosestPoint(la, lb, out pt, out test, tol) && Vector3Distance(pt, test) < tol;
+        }
+
+        public static bool SegmentSegmentIntersection(Segment3 la, Segment3 lb, out Vector3 pt, double tol) {
+            if (!LineLineIntersection(la, lb, out pt, tol)) {
+                return false;
+            }
+            return  pt.X >= Math.Min(la.A.X, la.B.X) && pt.X <= Math.Max(la.A.X, la.B.X) &&
+                    pt.Y >= Math.Min(la.A.Y, la.B.Y) && pt.Y <= Math.Max(la.A.Y, la.B.Y) &&
+                    pt.Z >= Math.Min(la.A.Z, la.B.Z) && pt.Z <= Math.Max(la.A.Z, la.B.Z) &&
+                    pt.X >= Math.Min(lb.A.X, lb.B.X) && pt.X <= Math.Max(lb.A.X, lb.B.X) &&
+                    pt.Y >= Math.Min(lb.A.Y, lb.B.Y) && pt.Y <= Math.Max(lb.A.Y, lb.B.Y) &&
+                    pt.Z >= Math.Min(lb.A.Z, lb.B.Z) && pt.Z <= Math.Max(lb.A.Z, lb.B.Z);
+        }
+
+
 
         // Plane Methods
 
@@ -550,6 +581,12 @@
         public static bool PointOnPlane(Plane plane, Vector3 pt, double tol) {
             var d = Vector3Dot(pt, plane.Normal);
             return Math.Abs(d - plane.Dist) < tol;
+        }
+
+        public static double PointPlaneSignedDistance(Vector3 pt, Plane plane)
+        {
+            var d = Vector3Dot(pt, plane.Normal);
+            return d - plane.Dist;
         }
 
         public static bool IsLineParallelToPlane(Segment3 s, Plane p, double tol) {
