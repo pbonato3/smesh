@@ -108,16 +108,22 @@
                 return SMMath.TransformTo3D(To3D, v);
             }
 
-            public bool TestCut(int idxA, int idxB, Vector3 testNormal) {
-                var ptA2d = Vertices2D[idxA];
-                var ptB2d = Vertices2D[idxB];
-                var dir = SMMath.Vector2Subtract(ptB2d, ptA2d);
-                var rightDir = new Vector2(dir.Y, -dir.X);
-                var testPt2d = SMMath.Vector2Add(ptA2d, SMMath.Vector2Scale(rightDir, 100));
-                var testPt3d = ToWorld(testPt2d);
-                var testDir = SMMath.Vector3Subtract(testPt3d, Vertices[idxA]);
+            public bool TestCut(int idxA, int idxB, Plane testPlane) {
+                for (int i = Triangles.Count - 3; i >= 0; i-=3) { 
+                    var a = Triangles[i + 0];
+                    var b = Triangles[i + 1];
+                    var c = Triangles[i + 2];
 
-                return SMMath.Vector3Dot(testDir, testNormal) < 0;
+                    if (idxA == a && idxB == b) { return SMMath.PointPlaneSignedDistance(Vertices[c], testPlane) > 0; }
+                    if (idxA == b && idxB == c) { return SMMath.PointPlaneSignedDistance(Vertices[a], testPlane) > 0; }
+                    if (idxA == c && idxB == a) { return SMMath.PointPlaneSignedDistance(Vertices[b], testPlane) > 0; }
+
+                    if (idxA == a && idxB == c) { return SMMath.PointPlaneSignedDistance(Vertices[b], testPlane) < 0; }
+                    if (idxA == b && idxB == a) { return SMMath.PointPlaneSignedDistance(Vertices[c], testPlane) < 0; }
+                    if (idxA == c && idxB == b) { return SMMath.PointPlaneSignedDistance(Vertices[a], testPlane) < 0; }
+                }
+                Console.WriteLine("ERROR - No face found to test cut direction.");
+                return true;
             }
 
             public bool AddCut(int idxA, int idxB, bool invert) {
@@ -171,13 +177,7 @@
                 Vector3 intersection;
                 var fb = builders[collisions[i]];
                 if (SMMath.SegmentPlaneIntersection(sg, fb.FacePlane, out intersection, tol)) {
-                    if (fb.Vertices2D.Count < 3) {
-                        fb.Vertices2D = new List<Vector2>();
-                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[0]));
-                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[1]));
-                        fb.Vertices2D.Add(fb.ToLocal(fb.Vertices[2]));
-                    }
-                    if (SMMath.IsPointInTriangle(fb.ToLocal(intersection), fb.Vertices2D[0], fb.Vertices2D[1], fb.Vertices2D[2]))
+                    if (SMMath.IsPointInTriangle(intersection, fb.Vertices[0], fb.Vertices[1], fb.Vertices[2], tol))
                     {
                         intersectionCount++;
                     }
@@ -547,7 +547,7 @@
             return result.ToArray();
         }
 
-
+        // DEPRECATED
         private static void Init2DSpace(ref FaceBuilder builder) {
             if (builder.Vertices2D.Count == builder.Vertices.Count) {
                 return;
@@ -588,16 +588,13 @@
 
 
         private static bool AddPointToBuilder(ref FaceBuilder builder, Vector3 pt, double tol, out int newPt){
-            // If not already inited, init 2D space
-            Init2DSpace(ref builder);
 
-            var pt2d = builder.ToLocal(pt);
             // If point doesn't snap to an existing one, it will be always added as last one.
-            newPt = builder.Vertices2D.Count;
+            newPt = builder.Vertices.Count;
 
             // If vertex is colose enough to an existing one do nothing
-            for (int i = 0; i < builder.Vertices2D.Count; ++i) {
-                if (SMMath.Vector2Distance(builder.Vertices2D[i], pt2d) <= tol) {
+            for (int i = 0; i < builder.Vertices.Count; ++i) {
+                if (SMMath.Vector3Distance(builder.Vertices[i], pt) <= tol) {
                     newPt = i;
                     return true;
                 }
@@ -607,20 +604,18 @@
             {
                 for (int j = 0; j < 3; ++j)
                 {
-                    var closest = SMMath.SegmentClosestPoint(pt2d, new Segment2(builder.FaceVertex2D(i, j), builder.FaceVertex2D(i, (j + 1) % 3)));
-                    if (SMMath.Vector2Distance(closest, pt2d) > tol)
+                    var closest = SMMath.SegmentClosestPoint(pt, new Segment3(builder.FaceVertex(i, j), builder.FaceVertex(i, (j + 1) % 3)));
+                    if (SMMath.Vector3Distance(closest, pt) > tol)
                     {
                         continue;
                     }
 
-
-                    // TODO: is it correct to add the closest?
-                    builder.Vertices.Add(builder.ToWorld(closest));
+                    // TODO: add pt or closest?
+                    builder.Vertices.Add(closest);
                     if (builder.Normals != null && builder.Normals.Count > 0)
                     {
                         builder.Normals.Add(SampleNormal(builder, builder.Vertices[builder.Vertices.Count - 1]));
                     }
-                    builder.Vertices2D.Add(closest);
                     int vertIdx = builder.Vertices.Count - 1;
 
                     var indexA = builder.Triangles[i * 3 + j];
@@ -641,6 +636,7 @@
                     builder.Triangles.RemoveAt(i * 3);
                     builder.Triangles.RemoveAt(i * 3);
 
+                    // Do the same thing with the opposite triangle on that segment if exists
                     for (int ii = i; ii < builder.Triangles.Count / 3 - 2; ++ii)
                     {
                         for (int jj = 0; jj < 3; ++jj)
@@ -668,13 +664,12 @@
                 }
 
                 // If the point is inside the triangle, add the point, remove the triangle and add 3 new triangles
-                if (SMMath.IsPointInTriangle(pt2d, builder.FaceVertex2D(i, 0), builder.FaceVertex2D(i, 1), builder.FaceVertex2D(i, 2)))
+                if (SMMath.IsPointInTriangle(pt, builder.FaceVertex(i, 0), builder.FaceVertex(i, 1), builder.FaceVertex(i, 2), tol))
                 {
                     builder.Vertices.Add(pt);
                     if (builder.Normals != null && builder.Normals.Count > 0) { 
                         builder.Normals.Add(SampleNormal(builder, pt));
                     }
-                    builder.Vertices2D.Add(pt2d);
                     int vertIdx = builder.Vertices.Count - 1;
 
                     builder.Triangles.Add(builder.Triangles[i * 3 + 0]);
@@ -703,12 +698,9 @@
         {
             cuts = new List<int>();
 
-            var ptA2d = builder.ToLocal(ptA);
-            var ptB2d = builder.ToLocal(ptB);
-
-            var seg = new Segment2(ptA2d, ptB2d);
+            var seg = new Segment3(ptA, ptB);
             var edges = new HashSet<Edge>();
-            var segments = new List<Segment2>();
+            var segments = new List<Segment3>();
 
             for (int i = 0; i < builder.Triangles.Count / 3; ++i)
             {
@@ -723,7 +715,7 @@
                     }
 
                     edges.Add(edge);
-                    segments.Add(new Segment2(builder.Vertices2D[edge.A], builder.Vertices2D[edge.B]));
+                    segments.Add(new Segment3(builder.Vertices[edge.A], builder.Vertices[edge.B]));
                 }
             }
 
@@ -733,12 +725,12 @@
 
             for (int i = 0; i<segments.Count; ++i)
             {
-                Vector2 intersection;
+                Vector3 intersection;
                 if (SMMath.SegmentSegmentIntersection(seg, segments[i], out intersection, tol))
                 {
-                    if (AddPointToBuilder(ref builder, builder.ToWorld(intersection), tol, out addedPt))
+                    if (AddPointToBuilder(ref builder, intersection, tol, out addedPt))
                     {
-                        var newDist = SMMath.Vector2Distance(ptA2d, builder.Vertices2D[addedPt]);
+                        var newDist = SMMath.Vector3Distance(ptA, builder.Vertices[addedPt]);
 
                         for (int c = 0; c <= cuts.Count; ++c)
                         {
@@ -748,7 +740,7 @@
                                 break;
                             }
 
-                            var d = SMMath.Vector2Distance(ptA2d, builder.Vertices2D[cuts[c]]);
+                            var d = SMMath.Vector3Distance(ptA, builder.Vertices[cuts[c]]);
                             if (newDist <= d)
                             {
                                 cuts.Insert(c, addedPt);
@@ -837,20 +829,14 @@
                         {
                             if (cuts[k] != cuts[k + 1])
                             {
-                                builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane.Normal));
+                                builderA.AddCut(cuts[k], cuts[k + 1], builderA.TestCut(cuts[k], cuts[k + 1], builderB.FacePlane));
                             }
                         }
                     }
                 }
                 else if (BonA.Count == 3)
                 {
-                    var a = builderA.ToLocal(BonA[0]);
-                    var b = builderA.ToLocal(BonA[1]);
-                    var c = builderA.ToLocal(BonA[2]);
-                    var dirb = SMMath.Vector2Subtract(b, a);
-                    var dirc = SMMath.Vector2Subtract(c, a);
-                    var right = new Vector2(dirb.Y, -dirb.X);
-                    bool invert = SMMath.Vector2Dot(right, dirc) < 0;
+                    bool invert = SMMath.Vector3Dot(builderA.FacePlane.Normal, builderB.FacePlane.Normal) < 0;
 
                     if (CutBuilderFaces(ref builderA, BonA[0], BonA[1], tol, out cuts))
                     {
@@ -893,20 +879,14 @@
                         {
                             if (cuts[k] != cuts[k + 1])
                             {
-                                builderB.AddCut(cuts[k], cuts[k + 1], builderB.TestCut(cuts[k], cuts[k + 1], builderA.FacePlane.Normal));
+                                builderB.AddCut(cuts[k], cuts[k + 1], builderB.TestCut(cuts[k], cuts[k + 1], builderA.FacePlane));
                             }
                         }
                     }
                 }
                 else if (AonB.Count == 3)
                 {
-                    var a = builderB.ToLocal(AonB[0]);
-                    var b = builderB.ToLocal(AonB[1]);
-                    var c = builderB.ToLocal(AonB[2]);
-                    var dirb = SMMath.Vector2Subtract(b, a);
-                    var dirc = SMMath.Vector2Subtract(c, a);
-                    var right = new Vector2(dirb.Y, -dirb.X);
-                    bool invert = SMMath.Vector2Dot(right, dirc) < 0;
+                    bool invert = SMMath.Vector3Dot(builderA.FacePlane.Normal, builderB.FacePlane.Normal) < 0;
 
                     if (CutBuilderFaces(ref builderB, AonB[0], AonB[1], tol, out cuts))
                     {
