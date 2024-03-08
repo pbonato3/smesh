@@ -38,10 +38,10 @@ for (int i = 0; i < meshA.VertCount; i++)
 //meshB.Indices = new int[6] { 0, 1, 2, 0, 3, 1 };
 
 
-var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/bunny.obj");
+var meshB = SMObj.ParseFile("C:/Users/paolo/source/repos/smesh/test/terrain.obj");
 var moveB = new Vector3(0.5, 0.5, 0.5);
 for (int i = 0; i < meshB.VertCount; i++) {
-    meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], moveB);
+    //meshB.Vertices[i] = SMMath.Vector3Add(meshB.Vertices[i], moveB);
     //meshB.Vertices[i] = SMMath.Vector3Scale(meshB.Vertices[i], 10);
 }
 
@@ -56,7 +56,7 @@ if (meshB.Normals == null || meshB.Normals.Length != meshB.Vertices.Length)
     SMCSG.RebuildNormals(ref meshB);
 }
 
-var result = SMCSG.RunOperation(meshA, meshB, SMCSG.Operation.AddOperation());
+var result = SMCSG.RunOperation(meshA, meshB, SMCSG.Operation.SplitAOperation());
 for (int i = 0; i < result.Length; ++i) { 
     SMObj.WriteFile("C:/Users/paolo/source/repos/smesh/test/out_" + i + ".obj", result[i]);
 }

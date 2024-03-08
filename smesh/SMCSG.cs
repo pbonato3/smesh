@@ -58,26 +58,19 @@
 
             public List<int> Triangles;
 
-            public List<Vector2> Vertices2D;
-
             // Cuts, definded as vertices indices
             public List<int> Cuts;                  // TODO: A set may improve performance when checking if cut already exists?
             // One cut flag for each vertex
             public List<bool> Cutted;
 
-            public AABB BBox;
             public Sphere Sphere;
             public Plane FacePlane;
 
             public bool[] Marked;
             public bool[] Keep;
 
-            public Matrix To2D;
-            public Matrix To3D;
-
             public FaceBuilder() { 
                 Vertices    = new List<Vector3>();
-                Vertices2D  = new List<Vector2>();
                 Normals     = new List<Vector3>();
                 Triangles   = new List<int>();
                 Cuts        = new List<int>();
@@ -89,26 +82,33 @@
             public Vector3 FaceVertex(int nT, int nV) {
                 return new Vector3(Vertices[Triangles[nT * 3 + nV]]);
             }
-            public Vector2 FaceVertex2D(int nT, int nV)
-            {
-                return new Vector2(Vertices2D[Triangles[nT * 3 + nV]]);
-            }
 
             public Vector3 FaceNormal(int nT, int nV)
             {
                 return new Vector3(Normals[Triangles[nT * 3 + nV]]);
             }
 
-            public Vector2 ToLocal(Vector3 v) {
-                return SMMath.TransformTo2D(To2D, v);
-            }
-
-            public Vector3 ToWorld(Vector2 v)
-            {
-                return SMMath.TransformTo3D(To3D, v);
-            }
-
             public bool TestCut(int idxA, int idxB, Plane testPlane) {
+                var testIdx = 0;
+                var maxDist = 0.0;
+                var cutSign = true;
+                for (int i = 0; i < 3; ++i) {
+                    var sd = SMMath.PointPlaneSignedDistance(Vertices[i], testPlane);
+                    var ud = Math.Abs(sd);
+                    if (ud > maxDist) { 
+                        testIdx = i;
+                        maxDist = ud;
+                        cutSign = sd > 0;
+                    }
+                }
+
+                var vc = SMMath.Vector3Subtract(Vertices[idxB], Vertices[idxA]);
+                var vt = SMMath.Vector3Subtract(Vertices[testIdx], Vertices[idxA]);
+                var cross = SMMath.Vector3Cross(vt, vc);
+
+                return cutSign ? SMMath.Vector3Dot(cross, FacePlane.Normal) > 0 : SMMath.Vector3Dot(cross, FacePlane.Normal) < 0;
+
+                /*
                 for (int i = Triangles.Count - 3; i >= 0; i-=3) { 
                     var a = Triangles[i + 0];
                     var b = Triangles[i + 1];
@@ -124,6 +124,7 @@
                 }
                 Console.WriteLine("ERROR - No face found to test cut direction.");
                 return true;
+                */
             }
 
             public bool AddCut(int idxA, int idxB, bool invert) {
@@ -546,24 +547,6 @@
 
             return result.ToArray();
         }
-
-        // DEPRECATED
-        private static void Init2DSpace(ref FaceBuilder builder) {
-            if (builder.Vertices2D.Count == builder.Vertices.Count) {
-                return;
-            }
-
-            builder.FacePlane = SMMath.PlaneFrom3Points(builder.Vertices[0], builder.Vertices[1], builder.Vertices[2]);
-            builder.Vertices2D = new List<Vector2>();
-
-            // Get transformation to and from local 2d triangle
-            SMMath.PlaneTransformations(builder.FacePlane, builder.Vertices[0], builder.Vertices[1], out builder.To3D, out builder.To2D);
-
-            for (int i = 0; i < builder.Vertices.Count; i++) {
-                builder.Vertices2D.Add(builder.ToLocal(builder.Vertices[i]));
-            }
-        }
-
 
         private static AABB ThreePointsAABB(Vector3 a, Vector3 b, Vector3 c) {
             AABB bbox = new AABB();

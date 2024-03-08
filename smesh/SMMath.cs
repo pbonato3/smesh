@@ -558,12 +558,7 @@
             if (!LineLineIntersection(la, lb, out pt, tol)) {
                 return false;
             }
-            return  pt.X >= Math.Min(la.A.X, la.B.X) && pt.X <= Math.Max(la.A.X, la.B.X) &&
-                    pt.Y >= Math.Min(la.A.Y, la.B.Y) && pt.Y <= Math.Max(la.A.Y, la.B.Y) &&
-                    pt.Z >= Math.Min(la.A.Z, la.B.Z) && pt.Z <= Math.Max(la.A.Z, la.B.Z) &&
-                    pt.X >= Math.Min(lb.A.X, lb.B.X) && pt.X <= Math.Max(lb.A.X, lb.B.X) &&
-                    pt.Y >= Math.Min(lb.A.Y, lb.B.Y) && pt.Y <= Math.Max(lb.A.Y, lb.B.Y) &&
-                    pt.Z >= Math.Min(lb.A.Z, lb.B.Z) && pt.Z <= Math.Max(lb.A.Z, lb.B.Z);
+            return EvaluateOnSegment(la, pt, tol) && EvaluateOnSegment(lb, pt, tol);
         }
 
 
