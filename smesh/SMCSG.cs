@@ -1197,13 +1197,13 @@
         }
         
 
-        private static Mesh BuildIndexedMesh(FaceBuilder[] builders, bool negate = false)
+        private static Mesh BuildIndexedMesh(FaceBuilder[] builders, bool negate = false, double tol = 0.0001)
         {
             Mesh mesh = new Mesh();
             var vertices = new List<Vector3>();
             var normals = new List<Vector3>();
             var indices = new List<int>();
-            var weldMap = new Dictionary<Vector3, List<int>>(); // TODO: use a bvh?
+            var searchTree = new SphereBVH();  // TODO: prebuild with original mersh vertices for better sorting?
 
             foreach (var builder in builders)
             {
@@ -1214,13 +1214,14 @@
                     }
                     for (int j = 0; j < 3; ++j)
                     {
-                        if (weldMap.ContainsKey(builder.FaceVertex(i, j)))
+                        var searchResult = searchTree.Search(new Sphere(builder.FaceVertex(i, j), tol));
+                        if (searchResult.Count > 0)
                         {
                             bool weld = false;
                             Vector3 normal = builder.FaceNormal(i, j);
-                            for (int n = 0; n < weldMap[builder.FaceVertex(i, j)].Count; ++n)
+                            for (int n = 0; n < searchResult.Count; ++n)
                             {
-                                int index = weldMap[builder.FaceVertex(i, j)][n];
+                                int index = searchResult[n];
                                 if (SMMath.AreEquals(normal, normals[index], 0)) {
                                     indices.Add(index);
                                     weld = true;
@@ -1229,14 +1230,14 @@
                             }
                             if (!weld) {
                                 indices.Add(vertices.Count);
-                                weldMap[builder.FaceVertex(i, j)].Add(vertices.Count);
+                                searchTree.Insert(new SphereBVH.SphereNode(new Sphere(builder.FaceVertex(i, j), 0), vertices.Count));
                                 vertices.Add(builder.FaceVertex(i, j));
                                 normals.Add(builder.FaceNormal(i, j));
                             }
                         }
                         else {
                             indices.Add(vertices.Count);
-                            weldMap.Add(builder.FaceVertex(i, j), new List<int> { vertices.Count });
+                            searchTree.Insert(new SphereBVH.SphereNode(new Sphere(builder.FaceVertex(i, j), 0), vertices.Count));
                             vertices.Add(builder.FaceVertex(i, j));
                             normals.Add(builder.FaceNormal(i, j));
                         }

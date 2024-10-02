@@ -88,6 +88,52 @@ namespace SMesh
                     results.Add(node.Id);
                 }
             }
+
+            /// <summary>
+            /// Insert a new node in this sub-tree
+            /// </summary>
+            /// <param name="node"> New node to add</param>
+            /// <param name="maxCount"> Max number of leaves in a node</param>
+            /// <param name="breadth"> Max number of sub-nodes in a node</param>
+            public void Insert(SphereNode node, int maxCount, int breadth) {
+                // This node is the root or contains only leaves
+                if (Children.Count == 0 || Children[0].Children.Count == 0)
+                {
+                    // If there is space for the node, add it
+                    if (Children.Count < maxCount) {
+                        Children.Add(node);
+                    } else {
+
+                        // Otherwise, split the node
+                        var newNodes = Children;
+                        newNodes.Add(node);
+                        var newnode = BuildBVHRecursion(newNodes, maxCount, breadth, Sorting.X_SORT);
+                        Id = newnode.Id;
+                        Sphere = newnode.Sphere;
+                        Children = newnode.Children;
+                    }
+
+                    // Update sphere volume
+                    SetVolume(Children);
+                }
+                // This node is not a leaf
+                else {
+                    // Find the child that needs lesser enlargement
+                    var child = 0;
+                    var minEnlarge = double.MaxValue;
+                    for (int i = 0; i < Children.Count; ++i) {
+                        var enlarge = SMMath.Vector3Distance(Children[i].Sphere.Point, node.Sphere.Point);
+                        if (enlarge < minEnlarge) { 
+                            minEnlarge = enlarge;
+                            child = i;
+                        }
+                    }
+                    // Insert the node in the child
+                    Children[child].Insert(node, maxCount, breadth);
+                    // Update the volume
+                    SetVolume(Children);
+                }
+            }
         }
 
         public enum Sorting { 
@@ -97,19 +143,20 @@ namespace SMesh
             Z_SORT
         }
         public SphereNode Root;
+        public int MaxLeaves = 24;
+        public int Breadth = 8;
 
         public SphereBVH() {
             Root = new SphereNode();
         }
 
-        public void BuildBVH(List<SphereNode> nodes, int maxLeafCount = 8, int breadth = 8, Sorting sorting = Sorting.X_SORT) {
+        public void BuildBVH(List<SphereNode> nodes, int maxLeafCount = 24, int breadth = 8, Sorting sorting = Sorting.X_SORT) {
+            Breadth = breadth;
+            MaxLeaves = maxLeafCount;
             Root = BuildBVHRecursion(nodes, maxLeafCount, breadth, sorting);
         }
 
-        private SphereNode BuildBVHRecursion(List<SphereNode> nodes, int max, int breadth, Sorting sorting) {
-            if (nodes.Count == 1) {
-                return nodes[0];
-            }
+        private static SphereNode BuildBVHRecursion(List<SphereNode> nodes, int max, int breadth, Sorting sorting) {
 
             var node = new SphereNode();
             node.SetVolume(nodes);
@@ -195,6 +242,10 @@ namespace SMesh
 
         public List<int> Search(Vector3 point, double range) {
             return Root.Search(point, range);
+        }
+
+        public void Insert(SphereNode node) {
+            Root.Insert(node, MaxLeaves, Breadth);
         }
 
         // TODO: Ray intersection

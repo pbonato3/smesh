@@ -10,7 +10,7 @@ namespace smesh_tests
     const double EPSILON = 0.00001;
 
         [TestMethod]
-        public void PlaneTransformations()
+        public void SimpleBVHSearch()
         {
             string workingDirectory = Environment.CurrentDirectory;
             // or: Directory.GetCurrentDirectory() gives the same result
