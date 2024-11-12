@@ -384,13 +384,25 @@
             return !(has_neg && has_pos);
         }
 
-        public static bool IsPointInTriangle(Vector3 pt, Vector3 v1, Vector3 v2, Vector3 v3, double tol)
+        /// <summary>
+        /// Test if a point is inside a 3D triangle
+        /// </summary>
+        /// <param name="pt">Point to test (supposed in the same plane).</param>
+        /// <param name="v1">First vertex of the triangle.</param>
+        /// <param name="v2">Second vertex of the triangle.</param>
+        /// <param name="v3">Third vertex of the triangle.</param>
+        /// <returns></returns>
+        public static bool IsPointInTriangle(Vector3 pt, Vector3 v1, Vector3 v2, Vector3 v3)
         {
-            double a1 = Vector3Angle(Vector3Subtract(pt, v1), Vector3Subtract(pt,v2));
-            double a2 = Vector3Angle(Vector3Subtract(pt, v2), Vector3Subtract(pt,v3));
-            double a3 = Vector3Angle(Vector3Subtract(pt, v3), Vector3Subtract(pt,v1));
+            // Compute the cross products of the 3 triangles obtained adding new point
+            var c1 = Vector3Cross(Vector3Subtract(pt, v1), Vector3Subtract(pt,v2));
+            var c2 = Vector3Cross(Vector3Subtract(pt, v2), Vector3Subtract(pt,v3));
+            var c3 = Vector3Cross(Vector3Subtract(pt, v3), Vector3Subtract(pt,v1));
 
-            return Math.Abs(2*Math.PI - (a1 + a2 + a3)) < tol;
+            // If all the dot products have the same direction, the point must be inside.
+            var dot1 = Vector3Dot(c1, c2);
+            var dot2 = Vector3Dot(c1, c3);
+            return dot1 > 0 && dot2 > 0;
         }
 
         public static bool GetPointOnSegment(Vector2 pt, Vector2 va, Vector2 vb, double tol, out Vector2 res) {

@@ -88,43 +88,18 @@
                 return new Vector3(Normals[Triangles[nT * 3 + nV]]);
             }
 
+            /// <summary>
+            /// Test Cut direction.
+            /// </summary>
+            /// <param name="idxA">First vertex index of the cut.</param>
+            /// <param name="idxB">Second vertex index of the cut.</param>
+            /// <param name="testPlane">Plane of the other face.</param>
+            /// <returns></returns>
             public bool TestCut(int idxA, int idxB, Plane testPlane) {
-                var testIdx = 0;
-                var maxDist = 0.0;
-                var cutSign = true;
-                for (int i = 0; i < 3; ++i) {
-                    var sd = SMMath.PointPlaneSignedDistance(Vertices[i], testPlane);
-                    var ud = Math.Abs(sd);
-                    if (ud > maxDist) { 
-                        testIdx = i;
-                        maxDist = ud;
-                        cutSign = sd > 0;
-                    }
-                }
-
-                var vc = SMMath.Vector3Subtract(Vertices[idxB], Vertices[idxA]);
-                var vt = SMMath.Vector3Subtract(Vertices[testIdx], Vertices[idxA]);
-                var cross = SMMath.Vector3Cross(vt, vc);
-
-                return cutSign ? SMMath.Vector3Dot(cross, FacePlane.Normal) > 0 : SMMath.Vector3Dot(cross, FacePlane.Normal) < 0;
-
-                /*
-                for (int i = Triangles.Count - 3; i >= 0; i-=3) { 
-                    var a = Triangles[i + 0];
-                    var b = Triangles[i + 1];
-                    var c = Triangles[i + 2];
-
-                    if (idxA == a && idxB == b) { return SMMath.PointPlaneSignedDistance(Vertices[c], testPlane) > 0; }
-                    if (idxA == b && idxB == c) { return SMMath.PointPlaneSignedDistance(Vertices[a], testPlane) > 0; }
-                    if (idxA == c && idxB == a) { return SMMath.PointPlaneSignedDistance(Vertices[b], testPlane) > 0; }
-
-                    if (idxA == a && idxB == c) { return SMMath.PointPlaneSignedDistance(Vertices[b], testPlane) < 0; }
-                    if (idxA == b && idxB == a) { return SMMath.PointPlaneSignedDistance(Vertices[c], testPlane) < 0; }
-                    if (idxA == c && idxB == b) { return SMMath.PointPlaneSignedDistance(Vertices[a], testPlane) < 0; }
-                }
-                Console.WriteLine("ERROR - No face found to test cut direction.");
-                return true;
-                */
+                // Test if the dirction of the cut is in the same direction of the cross product of the normals of the two faces
+                var dir = SMMath.Vector3Normal(SMMath.Vector3Subtract(Vertices[idxB], Vertices[idxA]));
+                var cross = SMMath.Vector3Cross(FacePlane.Normal, testPlane.Normal);
+                return SMMath.Vector3Dot(dir, cross) >= 0;
             }
 
             public bool AddCut(int idxA, int idxB, bool invert) {
@@ -178,7 +153,7 @@
                 Vector3 intersection;
                 var fb = builders[collisions[i]];
                 if (SMMath.SegmentPlaneIntersection(sg, fb.FacePlane, out intersection, tol)) {
-                    if (SMMath.IsPointInTriangle(intersection, fb.Vertices[0], fb.Vertices[1], fb.Vertices[2], tol))
+                    if (SMMath.IsPointInTriangle(intersection, fb.Vertices[0], fb.Vertices[1], fb.Vertices[2]))
                     {
                         intersectionCount++;
                     }
@@ -647,7 +622,7 @@
                 }
 
                 // If the point is inside the triangle, add the point, remove the triangle and add 3 new triangles
-                if (SMMath.IsPointInTriangle(pt, builder.FaceVertex(i, 0), builder.FaceVertex(i, 1), builder.FaceVertex(i, 2), tol))
+                if (SMMath.IsPointInTriangle(pt, builder.FaceVertex(i, 0), builder.FaceVertex(i, 1), builder.FaceVertex(i, 2)))
                 {
                     builder.Vertices.Add(pt);
                     if (builder.Normals != null && builder.Normals.Count > 0) { 
@@ -677,6 +652,7 @@
             return false;
         }
 
+        // TODO: Check the closest segment before cutting
         private static bool CutBuilderFaces(ref FaceBuilder builder, Vector3 ptA, Vector3 ptB, double tol, out List<int> cuts)
         {
             cuts = new List<int>();
